@@ -1,0 +1,40 @@
+[package]
+name = "snowflakedb-rs"
+version = "1.0.0"
+edition = "2024"
+license = ""
+
+[features]
+all = ["auth-cert", "arrow", "chrono", "decimal"]
+default = []
+auth-cert = ["dep:base64", "dep:jsonwebtoken", "dep:rsa", "dep:sha2"]
+arrow = []
+chrono = ["dep:chrono"]
+decimal = ["dep:rust_decimal"]
+reqwest = ["dep:reqwest", "dep:bytes"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+base64 = { version = "0.22", optional = true }
+jsonwebtoken = { version = "10.2", features = ["rust_crypto"], optional = true }
+rsa = { version = "0.9", optional = true }
+sha2 = { version = "0.10", optional = true }
+chrono = { version = "0.4", optional = true }
+rust_decimal = { version = "1.40", optional = true }
+reqwest = { version = "0.13", features = ["gzip", "json"], optional = true }
+bytes = { version = "1", optional = true }
+
+derive_builder = "0.20"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
+uuid = { version = "1", features = ["v4"] }
+flate2 = "1"
+async-stream = "0.3"
+hex = "0.4"
+futures-util = "0.3"
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["rt", "macros"] }
+reqwest = { version = "0.13", features = ["gzip", "json"] }

@@ -3,8 +3,8 @@ A lightweight, comprehensive and familiar database driver for the [Snowflake](ht
 
 ## Features
 - [x] Query results in JSON or Arrow
-- [x] Streamed results in JSON or Arrow RecordSets
-- [x] Parses results into `Column`, `Row`, `Cell` primatives for easy Rust usage
+- [x] Stream results in JSON or Arrow RecordSets
+- [x] Parse results into `Column`, `Row`, `Cell` primatives for easy Rust usage
 - [x] SQLx inspired API
 - [x] Password auth
 - [x] Certification auth 
@@ -14,17 +14,17 @@ A lightweight, comprehensive and familiar database driver for the [Snowflake](ht
 - [x] Describe queries without actual execution
 - [x] Custom API hostname for users in Mainland China, or custom enterprise users.
 - [x] Async agnostic, supports `tokio`, `smol`, etc
-- [x] Provide your own HTTP Client, or use `reqwest` feature
+- [x] Provide your own HTTP Client, or use `reqwest` feature [(See here)](#using-a-custom-http-client)
 - [x] `chrono` and `rust_decimal` parsing of cell values
-- [x] Lightweight by design without minimal dependencies
+- [x] Lightweight by design with minimal dependencies
 - [ ] GET/PUT support (WIP)
 
 ## Motivation
 snowflakedb-rs was built to provide all the functionality required to write an [Arrow Database Connection Protocol (ADBC)](https://arrow.apache.org/adbc/current/index.html) adapter for Snowflake natively in Rust.
 
-At the moment, the only existing library that provides all the features required for an ADBC adapter in Rust is the [adbc_snowflake](https://crates.io/crates/adbc_snowflake) crate. However, adbc_snowflake currently wraps [gosnowflake](https://github.com/snowflakedb/gosnowflake), requiring a Go compiler and bundling the Go runtime with your Rust binary in order to use. Furthermore, adbc_snowflake does not provide any streaming capabilities, which was not ideal for my personal use cases.
+At the moment, the only existing library that provides all the features required for an ADBC adapter in Rust is the [adbc_snowflake](https://crates.io/crates/adbc_snowflake) crate. However, adbc_snowflake currently wraps [gosnowflake](https://github.com/snowflakedb/gosnowflake), requiring a Go compiler and bundling the Go runtime with your Rust binary in order to use. Furthermore, adbc_snowflake does not provide any streaming capabilities, which was not ideal.
 
-As such, snowflakedb-rs aims to provide as much of the existing functionality gosnowflake currenctly provides, without needing to bundle a Go runtime, or call any other external dependencies for that matter. This library directly calls the exact same undocumented API used in gosnowflake.
+As such, snowflakedb-rs aims to provide as much of the existing functionality gosnowflake currently provides, without needing to bundle a Go runtime, or call any other external dependencies for that matter. This library directly calls the exact same undocumented API used in gosnowflake.
 
 Additionally, snowflakedb-rs provides many useful primitives that allows you to work with Snowflake directly in idiomatic Rust. The snowflakedb-rs API is partly inspired by [SQLx](https://github.com/launchbadge/sqlx), which should provide a familiar interface for Rust developers.
 
@@ -47,19 +47,21 @@ snowflakedb-rs = {
 }
 ```
 
-- `arrow`: Use Arrow as the data exchange medium between Snowflake and Rust. By default, JSON is used.
+- `arrow`: Use arrow as the data exchange medium between Snowflake and Rust. By default, JSON is used.
 
-- `auth-cert`: Use Certificate Authentication with Snowflake
+- `auth-cert`: Use certificate authentication with Snowflake
 
 - `chrono`: Deserialise `DATE`, `TIME`, `TIMESTAMP_LTZ`, `TIMESTAMP_NTZ`, `TIMESTAMP_TZ` into chrono types.
 
 - `decimal`: Deserialise `DECFLOAT` and `FIXED` into a `rust_decimal::Decimal`.
 
-- `reqwest`: Use `reqwest` as the underlying HTTP Client. Disable this if you want to pass your own HTTP Clent. [(See here)](#using-a-custom-http-client)
+- `reqwest`: Use `reqwest` as the underlying HTTP client. Disable if you want to use a custom HTTP client. [(See here)](#using-a-custom-http-client)
 
-> Warning: If you're not using snowflakedb-rs purely for retrieving Arrow Dataframes from Snowflake, its highly recommended to enable the `chrono` feature. Snowflake returns Date/Time types in difficult to read ints and floats, and snowflakedb-rs will return these types as a  `String` of raw numbers if `chrono` is disabled.
+> Warning: Its highly recommended to enable the `chrono` feature for most people. Snowflake returns Date/Time types in difficult to read ints and floats, and snowflakedb-rs will return these types as a  `String` of raw numbers if `chrono` is disabled.
 
 > If `decimal` if not enabled, `DECFLOAT` and `FIXED` will be returned as a `String`.
+
+> If you're using snowflakedb-rs purely for retrieving arrow dataframes from Snowflake, you only really need the `arrow` and `reqwest` features enabled. Date, Time and Decimals are already formatted into arrow by Snowflake's API, so you don't need the `chrono` or `decimal` feature enabled.
 
 ## Usage
 

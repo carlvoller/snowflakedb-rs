@@ -1,8 +1,11 @@
 [package]
 name = "snowflakedb-rs"
+description = "A lightweight, comprehensive and familiar database driver for the SnowflakeDB written natively in Rust"
 version = "1.0.0"
 edition = "2024"
-license = ""
+license = "BSD-3-Clause"
+homepage = "https://github.com/carlvoller/snowflakedb-rs"
+repository = "https://github.com/carlvoller/snowflakedb-rs"
 
 [features]
 all = ["auth-cert", "arrow", "chrono", "decimal"]

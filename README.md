@@ -466,5 +466,9 @@ async fn main() {
 }
 ```
 
+## Contributing
+PRs are welcomed! Any help is appreciated. There are a number of TODOs, FIXMEs, and improvements that can be done around the repo. If any of them are tied to a feature you need, please create an issue.
+
+
 ## License
 Copyright © 2026, Carl Ian Voller. Released under the BSD-3-Clause License.

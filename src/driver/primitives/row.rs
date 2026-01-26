@@ -3,7 +3,7 @@ use std::{fmt::Debug, str::FromStr, sync::Arc};
 #[cfg(feature = "chrono")]
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime, TimeZone, Utc};
 #[cfg(feature = "decimal")]
-use rust_decimal::Decimal;
+use bigdecimal::BigDecimal;
 
 use crate::{CellValue, SnowflakeError, error, this_errors};
 
@@ -121,8 +121,8 @@ fn cast_snowflake_to_rust_type(
             // let scale = col.scale.unwrap_or(0);
 
             let decimal = this_errors!(
-                "failed to convert FIXED/DECFLOAT to Decimal",
-                Decimal::from_str(value)
+                "failed to convert FIXED/DECFLOAT to BigDecimal",
+                BigDecimal::from_str(value)
             );
 
             if let ColumnType::Fixed = col.col_type {

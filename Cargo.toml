@@ -13,7 +13,7 @@ default = []
 auth-cert = ["dep:base64", "dep:jsonwebtoken", "dep:rsa", "dep:sha2"]
 arrow = ["dep:base64", "dep:arrow-ipc", "dep:arrow-array", "dep:arrow-schema", "dep:arrow-cast", "chrono"]
 chrono = ["dep:chrono"]
-decimal = ["dep:rust_decimal"]
+decimal = ["dep:bigdecimal"]
 reqwest = ["dep:reqwest", "dep:bytes"]
 
 [lib]
@@ -25,7 +25,7 @@ jsonwebtoken = { version = "10.2", features = ["rust_crypto"], optional = true }
 rsa = { version = "0.9", optional = true }
 sha2 = { version = "0.10", optional = true }
 chrono = { version = "0.4", optional = true }
-rust_decimal = { version = "1.40", optional = true }
+bigdecimal = { version = "0.4", optional = true }
 reqwest = { version = "0.13", features = ["gzip", "json"], optional = true }
 bytes = { version = "1", optional = true }
 arrow-ipc = { version = "57", optional = true }

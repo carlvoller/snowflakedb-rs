@@ -15,7 +15,7 @@ A lightweight, comprehensive and familiar database driver for the [Snowflake](ht
 - [x] Custom API hostname for users in Mainland China, or custom enterprise users.
 - [x] Async agnostic, supports `tokio`, `smol`, etc
 - [x] Provide your own HTTP Client, or use `reqwest` feature [(See here)](#using-a-custom-http-client)
-- [x] `chrono` and `rust_decimal` parsing of cell values
+- [x] `chrono` and `bigdecimal` parsing of cell values
 - [x] Lightweight by design with minimal dependencies
 - [ ] GET/PUT support (WIP)
 
@@ -53,7 +53,7 @@ snowflakedb-rs = {
 
 - `chrono`: Deserialise `DATE`, `TIME`, `TIMESTAMP_LTZ`, `TIMESTAMP_NTZ`, `TIMESTAMP_TZ` into chrono types.
 
-- `decimal`: Deserialise `DECFLOAT` and `FIXED` into a `rust_decimal::Decimal`.
+- `decimal`: Deserialise `DECFLOAT` and `FIXED` into a `bigdecimal::BigDecimal`.
 
 - `reqwest`: Use `reqwest` as the underlying HTTP client. Disable if you want to use a custom HTTP client. [(See here)](#using-a-custom-http-client)
 
@@ -156,7 +156,7 @@ async fn main() {
 RUN an `INSERT` statement:
  ```rust
 use snowflakedb_rs::{CellValue, Row, row};
-use rust_decimal::Decimal;
+use bigdecimal::{BigDecimal, num_bigint::BigInt};
 
 async fn main() {
     // ...
@@ -166,7 +166,7 @@ async fn main() {
         .unwrap();
 
     // Requires `decimal` feature to be enabled
-    let pi = Decimal::new(31415, 4);
+    let pi = BigDecimal::new(BigInt::from_i32(31415), 4);
     query.bind_row(row![90, "Carl Voller", pi]);
     query.bind_row(row![0.4, "Alice", pi]);
     query.bind_row(row![10, "Bob", pi]);

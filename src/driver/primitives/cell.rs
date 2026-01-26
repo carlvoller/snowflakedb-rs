@@ -4,16 +4,16 @@ use std::{fmt::Display, sync::Arc};
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Utc};
 
 #[cfg(feature = "decimal")]
-use rust_decimal::Decimal;
+use bigdecimal::BigDecimal;
 
 #[derive(Debug, Clone)]
 /// An enum describing which data_type and value is stored in this [`Cell`](`crate::driver::primitives::cell::Cell`)
 pub enum CellValue {
     /// Fixed Precision and Scale units are casted to Decimal
     #[cfg(feature = "decimal")]
-    Fixed(Option<Decimal>),
+    Fixed(Option<BigDecimal>),
     #[cfg(feature = "decimal")]
-    Decfloat(Option<Decimal>),
+    Decfloat(Option<BigDecimal>),
 
     #[cfg(not(feature = "decimal"))]
     Fixed(Option<f64>),
@@ -123,7 +123,7 @@ impl_to_cell_value!(
 );
 
 #[cfg(feature = "decimal")]
-impl_to_cell_value!(Decimal);
+impl_to_cell_value!(BigDecimal);
 
 #[cfg(feature = "chrono")]
 impl_to_cell_value!(
@@ -265,9 +265,9 @@ impl Display for CellValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let value_as_string = match self {
             #[cfg(feature = "decimal")]
-            CellValue::Fixed(decimal) => decimal.map(|x| x.to_string()),
+            CellValue::Fixed(decimal) => decimal.as_ref().map(|x| x.to_string()),
             #[cfg(feature = "decimal")]
-            CellValue::Decfloat(decimal) => decimal.map(|x| x.to_string()),
+            CellValue::Decfloat(decimal) => decimal.as_ref().map(|x| x.to_string()),
 
             #[cfg(not(feature = "decimal"))]
             CellValue::Fixed(x) => x.as_ref().map(|x| x.to_string()),

@@ -4,6 +4,8 @@ use arrow_array::{Array, timezone::Tz};
 use arrow_ipc::reader::StreamReader;
 use arrow_schema::Field;
 use async_stream::try_stream;
+#[cfg(feature = "decimal")]
+use bigdecimal::{BigDecimal, FromPrimitive};
 use chrono::TimeZone;
 use futures_util::TryStreamExt;
 
@@ -484,57 +486,97 @@ fn arrow_to_cell_value(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::Int8Array>()
-                // TODO: Use Decimal when feature is enabled
-                .map(|x| x.value(row_idx) as f64),
+                .map(|x| {
+                    #[cfg(not(feature = "decimal"))]
+                    return x.value(row_idx) as f64;
+                    #[cfg(feature = "decimal")]
+                    return BigDecimal::from_i8(x.value(row_idx));
+                })
+                .flatten(),
         )),
         arrow_schema::DataType::Int16 => Some(CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::Int16Array>()
-                // TODO: Use Decimal when feature is enabled
-                .map(|x| x.value(row_idx) as f64),
+                .map(|x| {
+                    #[cfg(not(feature = "decimal"))]
+                    return x.value(row_idx) as f64;
+                    #[cfg(feature = "decimal")]
+                    return BigDecimal::from_i16(x.value(row_idx));
+                })
+                .flatten(),
         )),
         arrow_schema::DataType::Int32 => Some(CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::Int32Array>()
-                // TODO: Use Decimal when feature is enabled
-                .map(|x| x.value(row_idx) as f64),
+                .map(|x| {
+                    #[cfg(not(feature = "decimal"))]
+                    return x.value(row_idx) as f64;
+                    #[cfg(feature = "decimal")]
+                    return BigDecimal::from_i32(x.value(row_idx));
+                })
+                .flatten(),
         )),
         arrow_schema::DataType::Int64 => Some(CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::Int64Array>()
-                // TODO: Use Decimal when feature is enabled
-                .map(|x| x.value(row_idx) as f64),
+                .map(|x| {
+                    #[cfg(not(feature = "decimal"))]
+                    return x.value(row_idx) as f64;
+                    #[cfg(feature = "decimal")]
+                    return BigDecimal::from_i64(x.value(row_idx));
+                })
+                .flatten(),
         )),
         arrow_schema::DataType::UInt8 => Some(CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::UInt8Array>()
-                // TODO: Use Decimal when feature is enabled
-                .map(|x| x.value(row_idx) as f64),
+                .map(|x| {
+                    #[cfg(not(feature = "decimal"))]
+                    return x.value(row_idx) as f64;
+                    #[cfg(feature = "decimal")]
+                    return BigDecimal::from_u8(x.value(row_idx));
+                })
+                .flatten(),
         )),
         arrow_schema::DataType::UInt16 => Some(CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::UInt16Array>()
-                // TODO: Use Decimal when feature is enabled
-                .map(|x| x.value(row_idx) as f64),
+                .map(|x| {
+                    #[cfg(not(feature = "decimal"))]
+                    return x.value(row_idx) as f64;
+                    #[cfg(feature = "decimal")]
+                    return BigDecimal::from_u16(x.value(row_idx));
+                })
+                .flatten(),
         )),
         arrow_schema::DataType::UInt32 => Some(CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::UInt32Array>()
-                // TODO: Use Decimal when feature is enabled
-                .map(|x| x.value(row_idx) as f64),
+                .map(|x| {
+                    #[cfg(not(feature = "decimal"))]
+                    return x.value(row_idx) as f64;
+                    #[cfg(feature = "decimal")]
+                    return BigDecimal::from_u32(x.value(row_idx));
+                })
+                .flatten(),
         )),
         arrow_schema::DataType::UInt64 => Some(CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::UInt64Array>()
-                // TODO: Use Decimal when feature is enabled
-                .map(|x| x.value(row_idx) as f64),
+                .map(|x| {
+                    #[cfg(not(feature = "decimal"))]
+                    return x.value(row_idx) as f64;
+                    #[cfg(feature = "decimal")]
+                    return BigDecimal::from_u64(x.value(row_idx));
+                })
+                .flatten(),
         )),
         arrow_schema::DataType::Float16 => Some(CellValue::Real(
             array
@@ -688,6 +730,74 @@ fn arrow_to_cell_value(
             .as_any()
             .downcast_ref::<arrow_array::StringViewArray>()
             .map(|x| CellValue::Text(Some(x.value(row_idx).to_string()))),
+
+        #[cfg(feature = "decimal")]
+        arrow_schema::DataType::Decimal32(_, scale) => {
+            use bigdecimal::num_bigint::BigInt;
+
+            let value_as_primitive = array
+                .as_any()
+                .downcast_ref::<arrow_array::Decimal32Array>()
+                .map(|x| x.value(row_idx));
+
+            value_as_primitive
+                .map(|x| {
+                    BigInt::from_i32(x)
+                        .map(|big| CellValue::Decfloat(Some(BigDecimal::new(big, *scale as i64))))
+                })
+                .flatten()
+        }
+
+        #[cfg(feature = "decimal")]
+        arrow_schema::DataType::Decimal64(_, scale) => {
+            use bigdecimal::num_bigint::BigInt;
+
+            let value_as_primitive = array
+                .as_any()
+                .downcast_ref::<arrow_array::Decimal64Array>()
+                .map(|x| x.value(row_idx));
+
+            value_as_primitive
+                .map(|x| {
+                    BigInt::from_i64(x)
+                        .map(|big| CellValue::Decfloat(Some(BigDecimal::new(big, *scale as i64))))
+                })
+                .flatten()
+        }
+
+        #[cfg(feature = "decimal")]
+        arrow_schema::DataType::Decimal128(_, scale) => {
+            use bigdecimal::num_bigint::BigInt;
+
+            let value_as_primitive = array
+                .as_any()
+                .downcast_ref::<arrow_array::Decimal128Array>()
+                .map(|x| x.value(row_idx));
+
+            value_as_primitive
+                .map(|x| {
+                    BigInt::from_i128(x)
+                        .map(|big| CellValue::Decfloat(Some(BigDecimal::new(big, *scale as i64))))
+                })
+                .flatten()
+        }
+
+        #[cfg(feature = "decimal")]
+        arrow_schema::DataType::Decimal256(_, scale) => {
+            use bigdecimal::num_bigint::BigInt;
+
+            let value_as_primitive = array
+                .as_any()
+                .downcast_ref::<arrow_array::Decimal256Array>()
+                .map(|x| x.value(row_idx));
+
+            value_as_primitive.map(|x| {
+                CellValue::Decfloat(Some(BigDecimal::new(
+                    BigInt::from_signed_bytes_le(&x.to_le_bytes()),
+                    *scale as i64,
+                )))
+            })
+        }
 
         #[cfg(not(feature = "decimal"))]
         arrow_schema::DataType::Decimal32(_, scale) => array

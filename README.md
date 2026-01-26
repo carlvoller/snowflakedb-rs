@@ -178,6 +178,7 @@ async fn main() {
 
     if results.is_dml() {
         println!("Rows Affected: {:?}", results.rows_affected());
+        assert!(results.rows_affected() == 3);
     }
 
     // ...
@@ -212,14 +213,9 @@ async fn main() {
         .await
         .expect("failed to get rows");
 
-    if let Some(row) = rows.get(0) {
-        let cell = row.get(0).unwrap();
-        assert!(cell.col.name == "number of rows inserted");
-        if let CellValue::Fixed(num_of_rows_affected) = cell.value {
-            assert!(
-                num_of_rows_affected.unwrap() == Decimal::new(2, 0),
-            );
-        }
+    if results.is_dml() {
+        println!("Rows Affected: {:?}", results.rows_affected());
+        assert!(results.rows_affected() == 1);
     }
 
     tx.rollback().await.unwrap();
@@ -250,7 +246,7 @@ async fn main() {
     assert!(describe.bind_count() == 1);
 
     // bind_metadata has more information on what Snowflake expects
-    assert!(describe.bind_metadata().unwrap().len() == 1)
+    assert!(describe.bind_metadata().unwrap().len() == 1);
 
     // Assuming MY_TABLE has 3 columns
     assert!(describe.columns.len() == 3);

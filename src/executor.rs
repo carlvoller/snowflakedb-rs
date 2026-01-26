@@ -1,10 +1,6 @@
 use crate::{
     SnowflakeError,
-    driver::{
-        Protocol,
-        primitives::row::Row,
-        query::{Query, QueryDescribeResult},
-    },
+    driver::{Protocol, primitives::row::Row, query::Query},
     http::client::SnowflakeHttpClient,
 };
 
@@ -13,7 +9,7 @@ where
     T::Query<'a, C>: Query<'a, C>,
 {
     /// Returns a Query. You can bind parameters to the Query, or execute it to get a Stream.
-    fn fetch<'b>(
+    fn query<'b>(
         &'b mut self,
         query: impl ToString,
     ) -> impl Future<Output = Result<T::Query<'b, C>, SnowflakeError>>
@@ -25,14 +21,6 @@ where
         &'b mut self,
         query: impl ToString,
     ) -> impl Future<Output = Result<Vec<Row>, SnowflakeError>>
-    where
-        'a: 'b;
-
-    /// Describe the `query`. Useful for getting information on the columns returned, or required bind parameters.
-    fn describe<'b>(
-        &'b mut self,
-        query: impl ToString,
-    ) -> impl Future<Output = Result<QueryDescribeResult, SnowflakeError>>
     where
         'a: 'b;
 

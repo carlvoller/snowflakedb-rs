@@ -5,7 +5,7 @@ use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime, TimeZone, Utc};
 #[cfg(feature = "decimal")]
 use rust_decimal::Decimal;
 
-use crate::{SnowflakeError, error, this_errors};
+use crate::{CellValue, SnowflakeError, error, this_errors};
 
 use super::column::{Column, ColumnType};
 
@@ -20,28 +20,56 @@ macro_rules! row {
     };
 }
 
+enum RowValuesType {
+    // Not parsed yet, usually for JSON
+    String(Vec<Option<String>>),
+    // Already Parsed, usually for Arrow
+    CellValues(Vec<CellValue>),
+}
+
 /// A single row in a [`QueryResult`](`crate::driver::query::QueryResult`)
 pub struct Row {
     /// Snowflake returns all values as strings. Cast it only when requested
-    values: Vec<Option<String>>,
+    values: RowValuesType,
     columns: Vec<Arc<Column>>,
     pub idx: i64,
 }
 
 impl Row {
-    pub fn new(columns: Vec<Arc<Column>>, values: Vec<Option<String>>, idx: i64) -> Self {
+    pub fn new_from_strings(
+        columns: Vec<Arc<Column>>,
+        values: Vec<Option<String>>,
+        idx: i64,
+    ) -> Self {
         Self {
-            values,
+            values: RowValuesType::String(values),
+            columns,
+            idx,
+        }
+    }
+
+    pub fn new_from_cell_values(
+        columns: Vec<Arc<Column>>,
+        values: Vec<CellValue>,
+        idx: i64,
+    ) -> Self {
+        Self {
+            values: RowValuesType::CellValues(values),
             columns,
             idx,
         }
     }
 
     pub fn get(&self, idx: usize) -> Result<super::cell::Cell, SnowflakeError> {
-        let value = if let Some(val) = self.values[idx].as_deref() {
-            cast_snowflake_to_rust_type(&self.columns[idx], val)?
-        } else {
-            super::cell::CellValue::Null
+        let value = match &self.values {
+            RowValuesType::CellValues(values) => values[idx].clone(),
+            RowValuesType::String(values) => {
+                if let Some(val) = values[idx].as_deref() {
+                    cast_snowflake_to_rust_type(&self.columns[idx], val)?
+                } else {
+                    super::cell::CellValue::Null
+                }
+            }
         };
 
         Ok(super::cell::Cell {
@@ -56,19 +84,25 @@ impl IntoIterator for Row {
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let cells: Vec<Result<super::cell::Cell, SnowflakeError>> = self
-            .columns
-            .into_iter()
-            .zip(self.values.into_iter())
-            .map(|(col, val_str)| {
-                let value = if let Some(val) = val_str.as_deref() {
-                    cast_snowflake_to_rust_type(&col, val)?
-                } else {
-                    super::cell::get_null_from_column(&col)
-                };
-                Ok(super::cell::Cell { col, value })
-            })
-            .collect();
+        let cells = self.columns.into_iter();
+
+        let cells: Vec<Result<super::cell::Cell, SnowflakeError>> = match self.values {
+            RowValuesType::CellValues(values) => cells
+                .zip(values.into_iter())
+                .map(|(col, value)| Ok(super::cell::Cell { col, value }))
+                .collect(),
+            RowValuesType::String(values) => cells
+                .zip(values.into_iter())
+                .map(|(col, val_str)| {
+                    let value = if let Some(val) = val_str.as_deref() {
+                        cast_snowflake_to_rust_type(&col, val)?
+                    } else {
+                        super::cell::get_null_from_column(&col)
+                    };
+                    Ok(super::cell::Cell { col, value })
+                })
+                .collect(),
+        };
 
         cells.into_iter()
     }
@@ -100,7 +134,21 @@ fn cast_snowflake_to_rust_type(
 
         #[cfg(not(feature = "decimal"))]
         ColumnType::Fixed | ColumnType::Decfloat => {
-            Ok(super::cell::CellValue::Text(Some(value.to_string())))
+            if let ColumnType::Fixed = col.col_type {
+                Ok(this_errors!(
+                    "failed to convert from REAL to f64",
+                    f64::from_str(value)
+                        .map(Some)
+                        .map(super::cell::CellValue::Fixed)
+                ))
+            } else {
+                Ok(this_errors!(
+                    "failed to convert from REAL to f64",
+                    f64::from_str(value)
+                        .map(Some)
+                        .map(super::cell::CellValue::Decfloat)
+                ))
+            }
         }
 
         #[cfg(feature = "chrono")]
@@ -299,13 +347,25 @@ fn cast_snowflake_to_rust_type(
 impl Debug for Row {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Row {{\n")?;
-        for (idx, item) in self.values.iter().enumerate() {
-            let col = self.columns.get(idx).unwrap();
-            let item = item.as_deref().unwrap_or("None");
-            let cell_value =
-                cast_snowflake_to_rust_type(col, item).unwrap_or(super::cell::CellValue::Null);
-            write!(f, "  {}: {}\n", col.name, cell_value,)?;
+
+        match &self.values {
+            RowValuesType::String(values) => {
+                for (idx, item) in values.iter().enumerate() {
+                    let col = self.columns.get(idx).unwrap();
+                    let item = item.as_deref().unwrap_or("None");
+                    let cell_value = cast_snowflake_to_rust_type(col, item)
+                        .unwrap_or(super::cell::CellValue::Null);
+                    write!(f, "  {}: {}\n", col.name, cell_value)?;
+                }
+            }
+            RowValuesType::CellValues(values) => {
+                for (idx, cell_value) in values.iter().enumerate() {
+                    let col = self.columns.get(idx).unwrap();
+                    write!(f, "  {}: {}\n", col.name, cell_value)?;
+                }
+            }
         }
+
         write!(f, "}}")
     }
 }

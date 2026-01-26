@@ -9,7 +9,7 @@ use rsa::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::SnowflakeError;
+use crate::{SnowflakeError, this_errors};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
@@ -40,16 +40,18 @@ pub(crate) fn create_cert_auth_jwt(
     username: &str,
     pk_pem: &str,
 ) -> Result<String, SnowflakeError> {
-    let pkey = rsa::RsaPrivateKey::from_pkcs8_pem(pk_pem)
-        .map_err(|e| SnowflakeError::JwtError(e.to_string()))?;
-    let pubk = pkey
-        .to_public_key()
-        .to_public_key_der()
-        .map_err(|e| SnowflakeError::JwtError(e.to_string()))?;
+    let pkey = this_errors!(
+        "failed to derive private key from pem",
+        rsa::RsaPrivateKey::from_pkcs8_pem(pk_pem)
+    );
+
+    let pubk = this_errors!(
+        "failed to get public key from private key",
+        pkey.to_public_key().to_public_key_der()
+    );
+
     let jwt_key = EncodingKey::from_rsa_der(
-        pkey.to_pkcs1_der()
-            .map_err(|e| SnowflakeError::JwtError(e.to_string()))?
-            .as_bytes(),
+        this_errors!("failed to convert public key into der", pkey.to_pkcs1_der()).as_bytes(),
     );
 
     let iss = format!(
@@ -79,8 +81,11 @@ pub(crate) fn create_cert_auth_jwt(
     };
 
     let header = Header::new(Algorithm::RS256);
-    let jwt = jsonwebtoken::encode(&header, &claims, &jwt_key)
-        .map_err(|e| SnowflakeError::JwtError(e.to_string()))?;
+
+    let jwt = this_errors!(
+        "failed to encode jwt for certificate authentication",
+        jsonwebtoken::encode(&header, &claims, &jwt_key)
+    );
 
     Ok(jwt)
 }

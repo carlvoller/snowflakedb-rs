@@ -4,7 +4,7 @@ use crate::{
     driver::{
         Protocol,
         primitives::row::Row,
-        query::{Query, QueryDescribeResult, QueryResult},
+        query::{Query, QueryResult},
     },
     executor::Executor,
     http::client::SnowflakeHttpClient,
@@ -44,7 +44,7 @@ impl<C: SnowflakeHttpClient, T: Protocol> Transaction<C, T> {
 }
 
 impl<'a, C: SnowflakeHttpClient, T: Protocol> Executor<'a, C, T> for Transaction<C, T> {
-    async fn fetch<'b>(
+    async fn query<'b>(
         &'b mut self,
         query: impl ToString,
     ) -> Result<T::Query<'b, C>, crate::SnowflakeError>
@@ -76,17 +76,6 @@ impl<'a, C: SnowflakeHttpClient, T: Protocol> Executor<'a, C, T> for Transaction
         }
 
         Ok(rows)
-    }
-
-    async fn describe<'b>(
-        &'b mut self,
-        query: impl ToString,
-    ) -> Result<QueryDescribeResult, crate::SnowflakeError>
-    where
-        'a: 'b,
-    {
-        let query = T::Query::new(query, &mut self.session);
-        query.describe().await
     }
 
     async fn ping<'b>(&'b mut self) -> Result<(), crate::SnowflakeError>

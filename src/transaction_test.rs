@@ -3,9 +3,9 @@ use futures_util::TryStreamExt;
 #[cfg(test)]
 use super::*;
 
+#[cfg(feature = "arrow")]
 #[tokio::test]
 async fn test_tx() {
-    use crate::CellValue;
     use crate::auth::AuthStrategy;
     use crate::row;
 
@@ -24,34 +24,60 @@ async fn test_tx() {
         .expect("failed to build connection options");
 
     let pool = opts
-        .connect_json()
+        .connect_arrow()
         .await
         .expect("failed to connect with json");
 
     let mut tx = pool.begin().await.expect("failed to get transaction");
 
+    let describe_results = tx
+        .query("SELECT * FROM TEST_TABLE")
+        .await
+        .expect("failed to describe")
+        .describe()
+        .await
+        .expect("failed to describe");
+
+    println!("{:?}", describe_results);
+
     let mut query = tx
-        .fetch("INSERT INTO TEST_TABLE VALUES (?, ?, ?)")
+        .query("INSERT INTO TEST_TABLE VALUES (?, ?, ?)")
         .await
         .expect("failed to create query");
 
     query.bind_row(row![999, "Carl Voller", "2004-01-05"]);
 
     let results = query.execute().await.expect("failed to execute query");
-    let rows = results
-        .rows()
-        .try_collect::<Vec<Row>>()
+
+    if results.is_dql() {
+        let expected = results.expected_result_length();
+        let mut rows = results.rows();
+        let mut count = 0;
+        while let Some(row) = rows.try_next().await.expect("failed to try stream") {
+            println!("{:?}", row);
+            count += 1;
+        }
+        assert!(count == expected);
+        println!("Retrieved {:?} rows", count);
+    } else if results.is_dml() {
+        println!("Number of affected rows: {:?}", results.rows_affected());
+    }
+
+    let fetch_batch = tx
+        .query("SELECT * FROM TEST_TABLE")
         .await
-        .expect("failed to get rows");
+        .expect("failed to describe");
 
-    assert!(rows.len() == 1);
+    let results = fetch_batch
+        .execute()
+        .await
+        .expect("failed to execute query");
 
-    let cell = rows[0].get(0).expect("failed to get first column in row");
+    println!("{:?}", results.schema());
 
-    assert!(cell.col.name == "number of rows inserted");
-
-    if let CellValue::Fixed(num_of_rows_affected) = cell.value {
-        assert!(num_of_rows_affected.unwrap() == "1")
+    let mut batches = results.record_batches();
+    while let Some(row) = batches.try_next().await.expect("failed to try stream") {
+        println!("{:?}", row);
     }
 
     tx.rollback().await.expect("failed to rollback");

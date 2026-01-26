@@ -11,7 +11,7 @@ repository = "https://github.com/carlvoller/snowflakedb-rs"
 all = ["auth-cert", "arrow", "chrono", "decimal"]
 default = []
 auth-cert = ["dep:base64", "dep:jsonwebtoken", "dep:rsa", "dep:sha2"]
-arrow = []
+arrow = ["dep:base64", "dep:arrow-ipc", "dep:arrow-array", "dep:arrow-schema", "dep:arrow-cast", "chrono"]
 chrono = ["dep:chrono"]
 decimal = ["dep:rust_decimal"]
 reqwest = ["dep:reqwest", "dep:bytes"]
@@ -28,6 +28,10 @@ chrono = { version = "0.4", optional = true }
 rust_decimal = { version = "1.40", optional = true }
 reqwest = { version = "0.13", features = ["gzip", "json"], optional = true }
 bytes = { version = "1", optional = true }
+arrow-ipc = { version = "57", optional = true }
+arrow-array = { version = "57", optional = true }
+arrow-schema = { version = "57", optional = true }
+arrow-cast = { version = "57", optional = true }
 
 derive_builder = "0.20"
 serde = { version = "1", features = ["derive"] }

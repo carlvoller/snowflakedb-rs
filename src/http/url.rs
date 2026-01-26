@@ -18,9 +18,9 @@ pub fn construct_url(
     for (key, value) in params {
         url.push_str(prefix);
 
-        encode_into(&mut url, key);
+        encode_into(&mut url, key)?;
         url.push('=');
-        encode_into(&mut url, value);
+        encode_into(&mut url, value)?;
 
         prefix = "&";
     }

@@ -6,6 +6,8 @@ use std::{
 use derive_builder::Builder;
 use futures_util::StreamExt;
 
+#[cfg(feature = "arrow")]
+use crate::driver::protocols::ArrowProtocol;
 use crate::{
     SnowflakeError,
     auth::{self, AuthStrategy, session::Session},
@@ -13,7 +15,7 @@ use crate::{
         Protocol,
         primitives::row::Row,
         protocols::JsonProtocol,
-        query::{Query, QueryDescribeResult, QueryResult},
+        query::{Query, QueryResult},
     },
     error,
     executor::Executor,
@@ -55,6 +57,33 @@ pub struct SnowflakeConnectionOpts {
 }
 
 impl SnowflakeConnectionOpts {
+    #[cfg(feature = "arrow")]
+    pub async fn connect_arrow_with_client<C: SnowflakeHttpClient>(
+        self,
+    ) -> Result<SnowflakePool<C, ArrowProtocol>, SnowflakeError> {
+        let client = C::new();
+
+        let pool_size = self.pool_size;
+
+        let connection = Connection {
+            client: client.clone(),
+            opts: Arc::new(self),
+        };
+
+        let mut sessions = Vec::with_capacity(pool_size);
+
+        for _ in 0..pool_size {
+            let session = auth::session::Session::new(connection.clone()).await?;
+            sessions.push(Arc::new(Mutex::new(session)));
+        }
+
+        Ok(SnowflakePool {
+            _protocol: ArrowProtocol::default(),
+            conn: connection,
+            pool: sessions,
+        })
+    }
+
     pub async fn connect_json_with_client<C: SnowflakeHttpClient>(
         self,
     ) -> Result<SnowflakePool<C, JsonProtocol>, SnowflakeError> {
@@ -103,6 +132,33 @@ impl SnowflakeConnectionOpts {
 
         Ok(SnowflakePool {
             _protocol: JsonProtocol::default(),
+            conn: connection,
+            pool: sessions,
+        })
+    }
+
+    #[cfg(all(feature = "reqwest", feature = "arrow"))]
+    pub async fn connect_arrow(
+        self,
+    ) -> Result<SnowflakePool<reqwest::Client, ArrowProtocol>, SnowflakeError> {
+        let client = reqwest::Client::new();
+
+        let pool_size = self.pool_size;
+
+        let connection = Connection {
+            client: client.clone(),
+            opts: Arc::new(self),
+        };
+
+        let mut sessions = Vec::with_capacity(pool_size);
+
+        for _ in 0..pool_size {
+            let session = auth::session::Session::new(connection.clone()).await?;
+            sessions.push(Arc::new(Mutex::new(session)));
+        }
+
+        Ok(SnowflakePool {
+            _protocol: ArrowProtocol::default(),
             conn: connection,
             pool: sessions,
         })
@@ -183,7 +239,7 @@ impl<'a, C: SnowflakeHttpClient, T: Protocol> Drop for SnowflakeConnection<'a, C
 }
 
 impl<'a, C: SnowflakeHttpClient, T: Protocol> Executor<'a, C, T> for SnowflakeConnection<'a, C, T> {
-    async fn fetch<'b>(
+    async fn query<'b>(
         &'b mut self,
         query: impl ToString,
     ) -> Result<T::Query<'b, C>, crate::SnowflakeError>
@@ -215,17 +271,6 @@ impl<'a, C: SnowflakeHttpClient, T: Protocol> Executor<'a, C, T> for SnowflakeCo
         }
 
         Ok(rows)
-    }
-
-    async fn describe<'b>(
-        &'b mut self,
-        query: impl ToString,
-    ) -> Result<QueryDescribeResult, crate::SnowflakeError>
-    where
-        'a: 'b,
-    {
-        let query = T::Query::new(query, &mut self.session);
-        query.describe().await
     }
 
     async fn ping<'b>(&'b mut self) -> Result<(), crate::SnowflakeError>

@@ -1,5 +1,7 @@
 mod json;
-// mod arrow;
+#[cfg(feature = "arrow")]
+mod arrow;
 
 pub use json::{JsonProtocol, JsonQuery, JsonQueryResult};
-// pub use arrow::ArrowProtocol;
+#[cfg(feature = "arrow")]
+pub use arrow::{ArrowProtocol, ArrowQuery, ArrowQueryResult};

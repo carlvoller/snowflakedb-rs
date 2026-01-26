@@ -18,8 +18,11 @@ pub use driver::{
         row::Row,
     },
     protocols::{JsonQuery, JsonQueryResult},
-    query::{Query, QueryDescribeResult, QueryResult},
+    query::{DescribeResult, Query, QueryResult},
 };
+
+#[cfg(feature = "arrow")]
+pub use driver::protocols::{ArrowQuery, ArrowQueryResult};
 
 pub use http::client::SnowflakeHttpClient;
 

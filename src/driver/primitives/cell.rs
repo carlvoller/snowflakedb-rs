@@ -16,9 +16,9 @@ pub enum CellValue {
     Decfloat(Option<Decimal>),
 
     #[cfg(not(feature = "decimal"))]
-    Fixed(Option<String>),
+    Fixed(Option<f64>),
     #[cfg(not(feature = "decimal"))]
-    Decfloat(Option<String>),
+    Decfloat(Option<f64>),
 
     Real(Option<f64>),
     Text(Option<String>),
@@ -270,9 +270,9 @@ impl Display for CellValue {
             CellValue::Decfloat(decimal) => decimal.map(|x| x.to_string()),
 
             #[cfg(not(feature = "decimal"))]
-            CellValue::Fixed(x) => x.as_deref().map(|x| x.to_string()),
+            CellValue::Fixed(x) => x.as_ref().map(|x| x.to_string()),
             #[cfg(not(feature = "decimal"))]
-            CellValue::Decfloat(x) => x.as_deref().map(|x| x.to_string()),
+            CellValue::Decfloat(x) => x.as_ref().map(|x| x.to_string()),
 
             #[cfg(feature = "chrono")]
             CellValue::TimestampLtz(date_time) => date_time.map(|x| x.to_string()),

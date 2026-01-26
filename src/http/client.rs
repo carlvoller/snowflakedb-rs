@@ -7,6 +7,8 @@ use core::future::Future;
 use reqwest;
 
 pub trait SnowflakeHttpClient: Clone + Send + 'static {
+    // type Body: AsyncRead + Unpin + Send + 'static;
+
     fn new() -> Self;
 
     fn get(
@@ -38,9 +40,8 @@ impl SnowflakeHttpClient for reqwest::Client {
         url: &str,
         headers: HashMap<String, String>,
     ) -> impl Future<Output = Result<Vec<u8>, SnowflakeError>> {
-        use crate::{error, this_errors};
-
         async move {
+            use crate::{error, this_errors};
             use reqwest::header::HeaderMap;
 
             let url = this_errors!("failed to parse url", reqwest::Url::parse(url));
@@ -71,7 +72,10 @@ impl SnowflakeHttpClient for reqwest::Client {
                     .await
             );
 
-            let bytes = this_errors!("failed to get response bytes", resp.bytes().await);
+            // TODO: Improve this. This currently waits for entire response body to be returned
+            // before it begins processing the data. Ideally this could be streamed into the Gzip Decoder,
+            // then streams into the arrow StreamReader
+            let bytes = this_errors!("failed to get response as bytes", resp.bytes().await);
 
             Ok(bytes.to_vec())
         }
@@ -87,8 +91,6 @@ impl SnowflakeHttpClient for reqwest::Client {
 
         async move {
             use reqwest::header::HeaderMap;
-
-            println!("{:?}", url);
 
             let url = this_errors!("failed to parse url", reqwest::Url::parse(url));
 
@@ -110,22 +112,14 @@ impl SnowflakeHttpClient for reqwest::Client {
                     >>()
             );
 
-            let headers = HeaderMap::from_iter(headers);     
-
-            println!("{:?}", String::from_utf8(body.clone()).unwrap()); 
+            let headers = HeaderMap::from_iter(headers);
 
             let resp = this_errors!(
                 "failed to send post request",
-                self.post(url)
-                    .body(body)
-                    .headers(headers)
-                    .send()
-                    .await
+                self.post(url).body(body).headers(headers).send().await
             );
 
             let bytes = this_errors!("failed to get response bytes", resp.bytes().await);
-
-            println!("{:?}", String::from_utf8(bytes.to_vec()).unwrap());
 
             Ok(bytes.to_vec())
         }

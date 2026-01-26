@@ -113,7 +113,7 @@ impl<C: SnowflakeHttpClient + Clone> Session<C> {
 
     async fn login(conn: Connection<C>) -> Result<http::login::AuthData, SnowflakeError> {
         let opts_clone = conn.get_opts();
-        let app_version = env!("CARGO_PKG_VERSION");
+        // let app_version = env!("CARGO_PKG_VERSION");
         let current_os = std::env::consts::OS;
         let current_os_arch = std::env::consts::ARCH;
         // TODO: Maybe actually retrieve release info
@@ -121,8 +121,9 @@ impl<C: SnowflakeHttpClient + Clone> Session<C> {
 
         let mut login_body = json!({
             "data": {
-                "CLIENT_APP_ID": "snowflakedb-rs",
-                "CLIENT_APP_VERSION": app_version,
+                // This *needs* to be Go. Snowflake API changes response types depending on the library used
+                "CLIENT_APP_ID": "Go",
+                "CLIENT_APP_VERSION": "1.18.1",
                 "SVN_REVISION": "",
                 "ACCOUNT_NAME": opts_clone.account_id.as_str(),
                 "LOGIN_NAME": opts_clone.username.as_str(),
@@ -205,6 +206,7 @@ impl<C: SnowflakeHttpClient + Clone> Session<C> {
             "failed to renew token",
             http::RequestBuilder::default()
                 .connection(self.conn.clone())
+                .headers([("ACCEPT".to_string(), "application/snowflake".to_string())])
                 .path(TOKEN_REQUEST_PATH)
                 .auth_token(&self.master_token.token)
                 .build()

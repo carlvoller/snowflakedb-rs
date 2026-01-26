@@ -59,9 +59,9 @@ snowflakedb-rs = {
 
 > Warning: Its highly recommended to enable the `chrono` feature for most people. Snowflake returns Date/Time types in difficult to read ints and floats, and snowflakedb-rs will return these types as a  `String` of raw numbers if `chrono` is disabled.
 
-> If `decimal` if not enabled, `DECFLOAT` and `FIXED` will be returned as a `String`.
+> If `decimal` if not enabled, `DECFLOAT` and `FIXED` will be returned as a `f64` in when using a JSON Connection.
 
-> If you're using snowflakedb-rs purely for retrieving arrow dataframes from Snowflake, you only really need the `arrow` and `reqwest` features enabled. Date, Time and Decimals are already formatted into arrow by Snowflake's API, so you don't need the `chrono` or `decimal` feature enabled.
+> Enabling `arrow` will also enable `chrono`.
 
 ## Usage
 
@@ -176,19 +176,8 @@ async fn main() {
         .await
         .unwrap();
 
-    let rows = results.rows()
-        .try_collect::<Vec<Row>>()
-        .await
-        .expect("failed to get rows");
-
-    if let Some(row) = rows.get(0) {
-        let cell = row.get(0).unwrap();
-        assert!(cell.col.name == "number of rows inserted");
-        if let CellValue::Fixed(num_of_rows_affected) = cell.value {
-            assert!(
-                num_of_rows_affected.unwrap() == Decimal::new(3, 0),
-            );
-        }
+    if results.is_dml() {
+        println!("Rows Affected: {:?}", results.rows_affected());
     }
 
     // ...
@@ -247,16 +236,21 @@ use snowflakedb_rs::{CellValue, Row, row};
 
 async fn main() {
     // ...
-    let describe = conn
-        .describe("SELECT * FROM MY_TABLE WHERE ID > ?")
+    let query = conn
+        .query("SELECT * FROM MY_TABLE WHERE ID > ?")
+        .await
+        .unwrap();
+
+    let describe = query
+        .describe()
         .await
         .unwrap();
 
     // The query has a single anonymous parameter (or "bind")
-    assert!(describe.num_of_binds == 1);
+    assert!(describe.bind_count() == 1);
 
     // bind_metadata has more information on what Snowflake expects
-    assert!(describe.bind_metadata.unwrap().len() == 1)
+    assert!(describe.bind_metadata().unwrap().len() == 1)
 
     // Assuming MY_TABLE has 3 columns
     assert!(describe.columns.len() == 3);
@@ -264,6 +258,86 @@ async fn main() {
     // ...
 }
 ```
+
+### Apache Arrow
+When you enable the `arrow` feature, you can configure snowflakedb-rs to use the Arrow format for communication with Snowflake's API.
+
+Here's how you configure arrow:
+```rust
+use snowflakedb_rs::{
+    SnowflakeConnectionOptsBuilder,
+    SnowflakeConnectionOpts,
+};
+
+
+async fn main() {
+    let opts: SnowflakeConnectionOpts = SnowflakeConnectionOptsBuilder::default()
+        .account_id("ACCOUNT_ID")
+        .username("USERNAME")
+        .warehouse("WAREHOUSE") // Optional
+        .role("ROLE") // Optional
+        .database("DATABASE") // Optional
+        .schema("SCHEMA") // Optional
+        .strategy(AuthStrategy::Password("PASSWORD".into()))
+        .pool_size(5)
+        .build()
+        .unwrap();
+
+    // Requires the `reqwest` feature enabled
+    let pool = opts
+        .connect_arrow() // <-- Specify arrow instead of json!
+        .await
+        .unwrap();
+
+    let conn = pool
+        .get()
+        .await
+        .unwrap();
+
+    // ...
+}
+```
+
+The Arrow `SnowflakeConnection` supports all the same methods the JSON `SnowflakeConnection`, and a few additional methods too.
+
+Here is how you directly access the underlying Snowflake `RecordBatch`es returned:
+
+```rust
+let query = conn
+    .fetch("SELECT CURRENT_TIME()")
+    .await
+    .unwrap();
+
+let results = query
+    .execute()
+    .await
+    .unwrap();
+
+// Streams RecordBatches as they come in
+let mut record_batches = results.record_batches();
+
+while let Some(batch) = record_batches.try_next().await.unwrap() {
+    println!("Got Arrow Batch: {:?}", batch);
+}
+```
+
+
+Here's how you describe an `arrow_schema::Schema`:
+```rust
+let query = conn
+    .fetch("SELECT CURRENT_TIME()")
+    .await
+    .unwrap();
+
+let describe = query
+    .describe()
+    .await
+    .unwrap();
+
+// Gives you an arrow_schema::Schema
+let schema = describe.schema();
+```
+
 
 ### Using a Custom HTTP Client
 By default, no HTTP Client is provided. However, snowflakedb-rs uses HTTP to communicate with Snowflake's APIs.

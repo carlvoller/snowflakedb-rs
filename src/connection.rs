@@ -195,6 +195,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct SnowflakePool<C: SnowflakeHttpClient + Clone, T: Protocol> {
     _protocol: T,
     conn: Connection<C>,

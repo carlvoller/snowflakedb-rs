@@ -17,7 +17,7 @@ pub use driver::{
         column::{Column, ColumnType},
         row::Row,
     },
-    protocols::{JsonProtocol, JsonQuery, JsonQueryResult},
+    protocols::{JsonProtocol, JsonQuery, JsonQueryResult, JsonDescribeResult},
     query::{DescribeResult, Query, QueryResult},
 };
 
@@ -62,7 +62,7 @@ pub type ArrowSnowflakePool<C = reqwest::Client> = SnowflakePool<C, ArrowProtoco
 pub type ArrowSnowflakePool<C> = SnowflakePool<C, ArrowProtocol>;
 
 #[cfg(feature = "arrow")]
-pub use driver::protocols::{ArrowProtocol, ArrowQuery, ArrowQueryResult};
+pub use driver::protocols::{ArrowProtocol, ArrowQuery, ArrowQueryResult, ArrowDescribeResult};
 
 pub use http::client::SnowflakeHttpClient;
 

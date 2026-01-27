@@ -50,11 +50,10 @@ pub type ArrowSnowflakeConnection<'a, C = reqwest::Client> =
 pub type ArrowSnowflakeConnection<'a, C> = SnowflakeConnection<'a, C, ArrowProtocol>;
 
 #[cfg(all(feature = "reqwest", feature = "arrow"))]
-pub type ArrowSnowflakeTransaction<'a, C = reqwest::Client> =
-    SnowflakeTransaction<C, ArrowProtocol>;
+pub type ArrowSnowflakeTransaction<C = reqwest::Client> = SnowflakeTransaction<C, ArrowProtocol>;
 
 #[cfg(all(not(feature = "reqwest"), feature = "arrow"))]
-pub type ArrowSnowflakeTransaction<'a, C> = SnowflakeTransaction<C, ArrowProtocol>;
+pub type ArrowSnowflakeTransaction<C> = SnowflakeTransaction<C, ArrowProtocol>;
 
 #[cfg(all(feature = "reqwest", feature = "arrow"))]
 pub type ArrowSnowflakePool<C = reqwest::Client> = SnowflakePool<C, ArrowProtocol>;

@@ -20,7 +20,7 @@ use crate::{
     error,
     executor::Executor,
     http::client::SnowflakeHttpClient,
-    transaction::Transaction,
+    transaction::SnowflakeTransaction,
 };
 
 #[derive(Builder, Debug, Clone)]
@@ -228,11 +228,11 @@ impl<C: SnowflakeHttpClient + Clone, T: Protocol> SnowflakePool<C, T> {
         Err(error!("no available sessions"))
     }
 
-    pub async fn begin(&self) -> Result<Transaction<C, T>, SnowflakeError> {
+    pub async fn begin(&self) -> Result<SnowflakeTransaction<C, T>, SnowflakeError> {
         let mut session = auth::session::Session::new(self.conn.clone()).await?;
         let q = T::Query::new("BEGIN;", &mut session);
         q.execute().await?;
-        Ok(Transaction::new(self._protocol.clone(), session))
+        Ok(SnowflakeTransaction::new(self._protocol.clone(), session))
     }
 }
 

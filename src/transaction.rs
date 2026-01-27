@@ -17,12 +17,12 @@ use futures_util::StreamExt;
 mod transaction_test;
 
 /// Holds a snowflake transaction. Can be committed or rollbacked.
-pub struct Transaction<C: SnowflakeHttpClient, T: Protocol> {
+pub struct SnowflakeTransaction<C: SnowflakeHttpClient, T: Protocol> {
     _protocol: T,
     session: Session<C>,
 }
 
-impl<C: SnowflakeHttpClient, T: Protocol> Transaction<C, T> {
+impl<C: SnowflakeHttpClient, T: Protocol> SnowflakeTransaction<C, T> {
     pub(crate) fn new(p: T, session: Session<C>) -> Self {
         Self {
             _protocol: p,
@@ -43,7 +43,7 @@ impl<C: SnowflakeHttpClient, T: Protocol> Transaction<C, T> {
     }
 }
 
-impl<'a, C: SnowflakeHttpClient, T: Protocol> Executor<'a, C, T> for Transaction<C, T> {
+impl<'a, C: SnowflakeHttpClient, T: Protocol> Executor<'a, C, T> for SnowflakeTransaction<C, T> {
     async fn query<'b>(
         &'b mut self,
         query: impl ToString,

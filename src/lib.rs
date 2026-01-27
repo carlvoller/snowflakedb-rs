@@ -21,12 +21,20 @@ pub use driver::{
     query::{DescribeResult, Query, QueryResult},
 };
 
+pub use transaction::SnowflakeTransaction;
+
 #[cfg(feature = "reqwest")]
 pub type JsonSnowflakeConnection<'a, C = reqwest::Client> =
     SnowflakeConnection<'a, C, JsonProtocol>;
 
 #[cfg(not(feature = "reqwest"))]
 pub type JsonSnowflakeConnection<'a, C> = SnowflakeConnection<'a, C, JsonProtocol>;
+
+#[cfg(feature = "reqwest")]
+pub type JsonSnowflakeTransaction<C = reqwest::Client> = SnowflakeTransaction<C, JsonProtocol>;
+
+#[cfg(not(feature = "reqwest"))]
+pub type JsonSnowflakeTransaction<C> = SnowflakeTransaction<C, JsonProtocol>;
 
 #[cfg(feature = "reqwest")]
 pub type JsonSnowflakePool<C = reqwest::Client> = SnowflakePool<C, JsonProtocol>;
@@ -42,6 +50,13 @@ pub type ArrowSnowflakeConnection<'a, C = reqwest::Client> =
 pub type ArrowSnowflakeConnection<'a, C> = SnowflakeConnection<'a, C, ArrowProtocol>;
 
 #[cfg(all(feature = "reqwest", feature = "arrow"))]
+pub type ArrowSnowflakeTransaction<'a, C = reqwest::Client> =
+    SnowflakeTransaction<C, ArrowProtocol>;
+
+#[cfg(all(not(feature = "reqwest"), feature = "arrow"))]
+pub type ArrowSnowflakeTransaction<'a, C> = SnowflakeTransaction<C, ArrowProtocol>;
+
+#[cfg(all(feature = "reqwest", feature = "arrow"))]
 pub type ArrowSnowflakePool<C = reqwest::Client> = SnowflakePool<C, ArrowProtocol>;
 
 #[cfg(all(not(feature = "reqwest"), feature = "arrow"))]
@@ -53,8 +68,6 @@ pub use driver::protocols::{ArrowProtocol, ArrowQuery, ArrowQueryResult};
 pub use http::client::SnowflakeHttpClient;
 
 pub use executor::Executor;
-
-pub use transaction::Transaction;
 
 #[cfg(test)]
 mod tests {}

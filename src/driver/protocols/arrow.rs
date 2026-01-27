@@ -488,7 +488,7 @@ fn arrow_to_cell_value(
                 .downcast_ref::<arrow_array::Int8Array>()
                 .map(|x| {
                     #[cfg(not(feature = "decimal"))]
-                    return x.value(row_idx) as f64;
+                    return Some(x.value(row_idx) as f64);
                     #[cfg(feature = "decimal")]
                     return BigDecimal::from_i8(x.value(row_idx));
                 })
@@ -500,7 +500,7 @@ fn arrow_to_cell_value(
                 .downcast_ref::<arrow_array::Int16Array>()
                 .map(|x| {
                     #[cfg(not(feature = "decimal"))]
-                    return x.value(row_idx) as f64;
+                    return Some(x.value(row_idx) as f64);
                     #[cfg(feature = "decimal")]
                     return BigDecimal::from_i16(x.value(row_idx));
                 })
@@ -512,7 +512,7 @@ fn arrow_to_cell_value(
                 .downcast_ref::<arrow_array::Int32Array>()
                 .map(|x| {
                     #[cfg(not(feature = "decimal"))]
-                    return x.value(row_idx) as f64;
+                    return Some(x.value(row_idx) as f64);
                     #[cfg(feature = "decimal")]
                     return BigDecimal::from_i32(x.value(row_idx));
                 })
@@ -524,7 +524,7 @@ fn arrow_to_cell_value(
                 .downcast_ref::<arrow_array::Int64Array>()
                 .map(|x| {
                     #[cfg(not(feature = "decimal"))]
-                    return x.value(row_idx) as f64;
+                    return Some(x.value(row_idx) as f64);
                     #[cfg(feature = "decimal")]
                     return BigDecimal::from_i64(x.value(row_idx));
                 })
@@ -536,7 +536,7 @@ fn arrow_to_cell_value(
                 .downcast_ref::<arrow_array::UInt8Array>()
                 .map(|x| {
                     #[cfg(not(feature = "decimal"))]
-                    return x.value(row_idx) as f64;
+                    return Some(x.value(row_idx) as f64);
                     #[cfg(feature = "decimal")]
                     return BigDecimal::from_u8(x.value(row_idx));
                 })
@@ -548,7 +548,7 @@ fn arrow_to_cell_value(
                 .downcast_ref::<arrow_array::UInt16Array>()
                 .map(|x| {
                     #[cfg(not(feature = "decimal"))]
-                    return x.value(row_idx) as f64;
+                    return Some(x.value(row_idx) as f64);
                     #[cfg(feature = "decimal")]
                     return BigDecimal::from_u16(x.value(row_idx));
                 })
@@ -560,7 +560,7 @@ fn arrow_to_cell_value(
                 .downcast_ref::<arrow_array::UInt32Array>()
                 .map(|x| {
                     #[cfg(not(feature = "decimal"))]
-                    return x.value(row_idx) as f64;
+                    return Some(x.value(row_idx) as f64);
                     #[cfg(feature = "decimal")]
                     return BigDecimal::from_u32(x.value(row_idx));
                 })
@@ -572,7 +572,7 @@ fn arrow_to_cell_value(
                 .downcast_ref::<arrow_array::UInt64Array>()
                 .map(|x| {
                     #[cfg(not(feature = "decimal"))]
-                    return x.value(row_idx) as f64;
+                    return Some(x.value(row_idx) as f64);
                     #[cfg(feature = "decimal")]
                     return BigDecimal::from_u64(x.value(row_idx));
                 })

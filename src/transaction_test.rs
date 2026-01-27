@@ -20,6 +20,8 @@ async fn test_tx() {
             std::env::var("SF_PASSWORD").unwrap(),
         ))
         .pool_size(1)
+        .download_chunks_in_parallel(10 as usize)
+        .download_chunks_in_order(false)
         .build()
         .expect("failed to build connection options");
 

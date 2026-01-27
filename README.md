@@ -42,7 +42,7 @@ $ cargo add snowflakedb-rs
 ```toml
 # Cargo.toml
 snowflakedb-rs = {
-    version = "1.0.0",
+    version = "1",
     features = ["auth-cert", "arrow", "chrono", "decimal", "reqwest"]
 }
 ```
@@ -88,6 +88,8 @@ async fn main() {
         .database("DATABASE") // Optional
         .schema("SCHEMA") // Optional
         .strategy(AuthStrategy::Password("PASSWORD".into()))
+        .download_chunks_in_parallel(10 as usize) // Optional
+        .download_chunks_in_order(false) // Optional
         .pool_size(5)
         .build()
         .unwrap();

@@ -7,7 +7,7 @@ use async_stream::try_stream;
 #[cfg(feature = "arrow")]
 use base64::Engine;
 use flate2::read::GzDecoder;
-use futures_util::stream::BoxStream;
+use futures_util::stream::{BoxStream, FuturesOrdered, FuturesUnordered, StreamExt};
 use serde::Deserialize;
 
 static STATEMENT_TYPE_ID_SELECT: i64 = 0x1000;
@@ -162,39 +162,72 @@ impl RawQueryResponse {
                 yield (0i64, batch);
             }
 
-            while let Some(chunk) = self.chunks.pop_front() {
-                // Requests can take very long to load due to network.
-                // Majority of the latency right now is from just downloading the chunk.
-                // The underlying client does do a .to_vec() copy, but it barely made a
-                // difference during testing. Most effective fix for this is probably
-                // to parallelise chunk retrieval.
-                // When querying a sample table with 100_000_000 rows, CPU jumps between
-                // 0.5% to 7% usage on an M1 Max 24 Core Machine. Memory hovers around ~80MB.
-                // TODO: Allow configuring parallel chunk retrieval.
-                let request = http::RequestBuilder::default()
-                    .full_url(chunk.url)
-                    .headers(self.chunk_headers.clone())
-                    .connection(conn.clone())
-                    .build()
-                    .map_err(|e| error!("failed to build get chunk request", e))?;
+            let spawn_next = |chunks: &mut VecDeque<QueryResponseChunk>, conn: &Connection<C>, headers: &HashMap<String, String>| {
+                if let Some(chunk) = chunks.pop_front() {
+                    let conn = conn.clone();
+                    let headers = headers.clone();
+                    let url = chunk.url.clone();
+                    let row_count = chunk.row_count;
 
-                let resp = request.get_as_bytes().await?;
+                    Some(async move {
+                        let request = http::RequestBuilder::default()
+                            .full_url(url)
+                            .headers(headers)
+                            .connection(conn)
+                            .build()
+                            .map_err(|e| error!("failed to build get chunk request", e))?;
 
-                if resp[0] == 0x1F && resp[1] == 0x8B {
-                    // Unzipping can take up to 0.3seconds for large Arrow Payloads
-                    let mut gz = GzDecoder::new(resp.as_slice());
-                    let mut output = Vec::new();
-                    gz.read_to_end(&mut output)
-                        .map_err(|e| error!("failed to decompress chunk", e))?;
+                        let resp = request.get_as_bytes().await?;
 
-                    // Manually drop resp as its not needed anymore while waiting
-                    // for the caller to poll the next result in the stream
-                    drop(resp);
-                    yield (chunk.row_count, output);
+                        let output = if resp.len() > 2 && resp[0] == 0x1F && resp[1] == 0x8B {
+                            let mut gz = GzDecoder::new(resp.as_slice());
+                            let mut decoded = Vec::new();
+                            gz.read_to_end(&mut decoded)
+                                .map_err(|e| error!("failed to decompress chunk", e))?;
+                            decoded
+                        } else {
+                            resp
+                        };
+
+                        Ok::<(i64, Vec<u8>), SnowflakeError>((row_count, output))
+                    })
                 } else {
-                    yield (chunk.row_count, resp);
+                    None
+                }
+            };
+
+            if conn.get_opts().download_chunks_in_order {
+                let mut chunk_downloads = FuturesOrdered::new();
+                for _ in 0..conn.get_opts().download_chunks_in_parallel {
+                    if let Some(stream) = spawn_next(&mut self.chunks, &conn, &self.chunk_headers) {
+                        chunk_downloads.push_back(stream);
+                    }
+                }
+
+                while let Some(chunk) = chunk_downloads.next().await {
+                    yield chunk?;
+
+                    if let Some(stream) = spawn_next(&mut self.chunks, &conn, &self.chunk_headers) {
+                        chunk_downloads.push_back(stream);
+                    }
+                }
+            } else {
+                let mut chunk_downloads = FuturesUnordered::new();
+                    for _ in 0..conn.get_opts().download_chunks_in_parallel {
+                    if let Some(stream) = spawn_next(&mut self.chunks, &conn, &self.chunk_headers) {
+                        chunk_downloads.push(stream);
+                    }
+                }
+
+                while let Some(chunk) = chunk_downloads.next().await {
+                    yield chunk?;
+
+                    if let Some(stream) = spawn_next(&mut self.chunks, &conn, &self.chunk_headers) {
+                        chunk_downloads.push(stream);
+                    }
                 }
             }
+
         };
 
         Box::pin(stream)

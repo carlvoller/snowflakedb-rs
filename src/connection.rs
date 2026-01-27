@@ -54,6 +54,14 @@ pub struct SnowflakeConnectionOpts {
     /// 如果你是在中国境内连接，请将此项设置为 `https://{account_id}.snowflakecomputing.cn`
     #[builder(setter(into, strip_option), default = None)]
     pub(crate) host: Option<String>,
+
+    /// Enable downloading multiple chunks at once
+    #[builder(setter(into), default = 1)]
+    pub(crate) download_chunks_in_parallel: usize,
+
+    /// Should parallel chunks be streamed in order? Set this to false for better performance
+    #[builder(setter(into), default = true)]
+    pub(crate) download_chunks_in_order: bool
 }
 
 impl SnowflakeConnectionOpts {

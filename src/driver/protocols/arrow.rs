@@ -114,11 +114,7 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for ArrowQuery<'a, C> {
             .map(|x| Arc::new(x))
             .collect::<Vec<Arc<Column>>>();
 
-        Ok(ArrowDescribeResult {
-            bind_count: raw.number_of_binds,
-            bind_metadata: raw.meta_data_of_binds,
-            columns: cols,
-        })
+        Ok(ArrowDescribeResult { columns: cols, raw })
     }
 }
 
@@ -166,7 +162,7 @@ impl<C: SnowflakeHttpClient> ArrowQueryResult<C> {
         if self.is_dml() {
             arrow_schema::Schema::empty()
         } else {
-            row_types_to_arrow_schema(&self.raw.rowtype)
+            row_types_to_arrow_schema(&self.cols)
         }
     }
 }
@@ -268,8 +264,7 @@ impl<C: SnowflakeHttpClient + Clone> QueryResult for ArrowQueryResult<C> {
 #[derive(Debug)]
 pub struct ArrowDescribeResult {
     columns: Vec<Arc<Column>>,
-    bind_count: i32,
-    bind_metadata: Option<Vec<BindMetadata>>,
+    raw: RawQueryResponse,
 }
 
 impl DescribeResult for ArrowDescribeResult {
@@ -278,11 +273,29 @@ impl DescribeResult for ArrowDescribeResult {
     }
 
     fn bind_metadata(&self) -> Option<Vec<BindMetadata>> {
-        self.bind_metadata.clone()
+        self.raw.meta_data_of_binds.clone()
     }
 
     fn bind_count(&self) -> i32 {
-        self.bind_count
+        self.raw.number_of_binds
+    }
+
+    fn is_dml(&self) -> bool {
+        self.raw.is_dml()
+    }
+
+    fn is_dql(&self) -> bool {
+        self.raw.is_dql()
+    }
+}
+
+impl ArrowDescribeResult {
+    pub fn schema(&self) -> arrow_schema::Schema {
+        if self.is_dml() {
+            arrow_schema::Schema::empty()
+        } else {
+            row_types_to_arrow_schema(&self.columns)
+        }
     }
 }
 
@@ -312,7 +325,7 @@ fn transform_record_batch(
 }
 
 // Taken from https://github.com/apache/arrow-adbc/blob/main/go/adbc/driver/snowflake/record_reader.go
-fn row_types_to_arrow_schema(row_types: &[Column]) -> arrow_schema::Schema {
+fn row_types_to_arrow_schema(row_types: &[Arc<Column>]) -> arrow_schema::Schema {
     let mut fields = Vec::with_capacity(row_types.len());
 
     for col in row_types {

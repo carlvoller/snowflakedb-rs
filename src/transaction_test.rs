@@ -33,7 +33,7 @@ async fn test_tx() {
     let mut tx = pool.begin().await.expect("failed to get transaction");
 
     let describe_results = tx
-        .query("SELECT * FROM TEST_TABLE")
+        .query("INSERT INTO TEST_TABLE VALUES (?, ?, ?)")
         .await
         .expect("failed to describe")
         .describe()

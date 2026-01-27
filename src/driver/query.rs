@@ -62,6 +62,12 @@ pub trait DescribeResult {
 
     /// Returns how many parameters this query expects.
     fn bind_count(&self) -> i32;
+
+    /// Returns `true` if the query was a DML Query. For example, an `UPDATE`, `INSERT` or `DELETE`.
+    fn is_dml(&self) -> bool;
+
+    /// Returns `true` if the query was a DQL Query. For example, a `SELECT`.
+    fn is_dql(&self) -> bool;
 }
 
 // #[derive(Debug)]

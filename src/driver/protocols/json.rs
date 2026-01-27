@@ -95,11 +95,7 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for JsonQuery<'a, C> {
             .map(|x| Arc::new(x))
             .collect::<Vec<Arc<Column>>>();
 
-        Ok(JsonDescribeResult {
-            bind_count: raw.number_of_binds,
-            bind_metadata: raw.meta_data_of_binds,
-            columns: cols,
-        })
+        Ok(JsonDescribeResult { columns: cols, raw })
     }
 
     async fn execute(mut self) -> Result<Self::Result, SnowflakeError> {
@@ -232,8 +228,7 @@ impl<C: SnowflakeHttpClient + Clone> QueryResult for JsonQueryResult<C> {
 #[derive(Debug)]
 pub struct JsonDescribeResult {
     columns: Vec<Arc<Column>>,
-    bind_count: i32,
-    bind_metadata: Option<Vec<BindMetadata>>,
+    raw: RawQueryResponse,
 }
 
 impl DescribeResult for JsonDescribeResult {
@@ -242,10 +237,18 @@ impl DescribeResult for JsonDescribeResult {
     }
 
     fn bind_metadata(&self) -> Option<Vec<BindMetadata>> {
-        self.bind_metadata.clone()
+        self.raw.meta_data_of_binds.clone()
     }
 
     fn bind_count(&self) -> i32 {
-        self.bind_count
+        self.raw.number_of_binds
+    }
+
+    fn is_dml(&self) -> bool {
+        self.raw.is_dml()
+    }
+
+    fn is_dql(&self) -> bool {
+        self.raw.is_dql()
     }
 }

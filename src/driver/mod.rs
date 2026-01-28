@@ -6,7 +6,7 @@ pub mod protocols;
 pub mod query;
 
 pub trait Protocol: Clone {
-    type Query<'a, C>: Query<'a, C>
+    type Query<C>: Query<C>
     where
-        C: SnowflakeHttpClient + 'a;
+        C: SnowflakeHttpClient;
 }

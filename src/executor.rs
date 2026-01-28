@@ -4,28 +4,22 @@ use crate::{
     http::client::SnowflakeHttpClient,
 };
 
-pub trait Executor<'a, C: SnowflakeHttpClient + 'a, T: Protocol>
+pub trait Executor<C: SnowflakeHttpClient, T: Protocol>
 where
-    T::Query<'a, C>: Query<'a, C>,
+    T::Query<C>: Query<C>,
 {
     /// Returns a Query. You can bind parameters to the Query, or execute it to get a Stream.
-    fn query<'b>(
-        &'b mut self,
+    fn query(
+        &mut self,
         query: impl ToString,
-    ) -> impl Future<Output = Result<T::Query<'b, C>, SnowflakeError>>
-    where
-        'a: 'b;
+    ) -> impl Future<Output = Result<T::Query<C>, SnowflakeError>>;
 
     /// Returns a QueryResult. This buffers the entire result before returning.
-    fn fetch_all<'b>(
-        &'b mut self,
+    fn fetch_all(
+        &mut self,
         query: impl ToString,
-    ) -> impl Future<Output = Result<Vec<Row>, SnowflakeError>>
-    where
-        'a: 'b;
+    ) -> impl Future<Output = Result<Vec<Row>, SnowflakeError>>;
 
     /// Pings the Snowflake Database. Useful for checking if credentials are valid and server is up.
-    fn ping<'b>(&'b mut self) -> impl Future<Output = Result<(), SnowflakeError>>
-    where
-        'a: 'b;
+    fn ping(&mut self) -> impl Future<Output = Result<(), SnowflakeError>>;
 }

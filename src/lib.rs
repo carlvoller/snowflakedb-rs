@@ -17,18 +17,17 @@ pub use driver::{
         column::{Column, ColumnType},
         row::Row,
     },
-    protocols::{JsonProtocol, JsonQuery, JsonQueryResult, JsonDescribeResult},
+    protocols::{JsonDescribeResult, JsonProtocol, JsonQuery, JsonQueryResult},
     query::{DescribeResult, Query, QueryResult},
 };
 
 pub use transaction::SnowflakeTransaction;
 
 #[cfg(feature = "reqwest")]
-pub type JsonSnowflakeConnection<'a, C = reqwest::Client> =
-    SnowflakeConnection<'a, C, JsonProtocol>;
+pub type JsonSnowflakeConnection<C = reqwest::Client> = SnowflakeConnection<C, JsonProtocol>;
 
 #[cfg(not(feature = "reqwest"))]
-pub type JsonSnowflakeConnection<'a, C> = SnowflakeConnection<'a, C, JsonProtocol>;
+pub type JsonSnowflakeConnection<C> = SnowflakeConnection<C, JsonProtocol>;
 
 #[cfg(feature = "reqwest")]
 pub type JsonSnowflakeTransaction<C = reqwest::Client> = SnowflakeTransaction<C, JsonProtocol>;
@@ -43,11 +42,10 @@ pub type JsonSnowflakePool<C = reqwest::Client> = SnowflakePool<C, JsonProtocol>
 pub type JsonSnowflakePool<C> = SnowflakePool<C, JsonProtocol>;
 
 #[cfg(all(feature = "reqwest", feature = "arrow"))]
-pub type ArrowSnowflakeConnection<'a, C = reqwest::Client> =
-    SnowflakeConnection<'a, C, ArrowProtocol>;
+pub type ArrowSnowflakeConnection<C = reqwest::Client> = SnowflakeConnection<C, ArrowProtocol>;
 
 #[cfg(all(not(feature = "reqwest"), feature = "arrow"))]
-pub type ArrowSnowflakeConnection<'a, C> = SnowflakeConnection<'a, C, ArrowProtocol>;
+pub type ArrowSnowflakeConnection<C> = SnowflakeConnection<C, ArrowProtocol>;
 
 #[cfg(all(feature = "reqwest", feature = "arrow"))]
 pub type ArrowSnowflakeTransaction<C = reqwest::Client> = SnowflakeTransaction<C, ArrowProtocol>;
@@ -62,7 +60,7 @@ pub type ArrowSnowflakePool<C = reqwest::Client> = SnowflakePool<C, ArrowProtoco
 pub type ArrowSnowflakePool<C> = SnowflakePool<C, ArrowProtocol>;
 
 #[cfg(feature = "arrow")]
-pub use driver::protocols::{ArrowProtocol, ArrowQuery, ArrowQueryResult, ArrowDescribeResult};
+pub use driver::protocols::{ArrowDescribeResult, ArrowProtocol, ArrowQuery, ArrowQueryResult};
 
 pub use http::client::SnowflakeHttpClient;
 

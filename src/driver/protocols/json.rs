@@ -1,7 +1,7 @@
 use std::{
     collections::VecDeque,
     io::{Cursor, Read},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 
 use async_stream::try_stream;
@@ -25,16 +25,16 @@ use crate::{
     this_errors,
 };
 
-use futures_util::TryStreamExt;
+use futures_util::{TryStreamExt, lock::Mutex};
 
 #[derive(Clone)]
 pub struct JsonProtocol {}
 
 impl Protocol for JsonProtocol {
-    type Query<'a, C>
-        = JsonQuery<'a, C>
+    type Query<C>
+        = JsonQuery<C>
     where
-        C: SnowflakeHttpClient + 'a;
+        C: SnowflakeHttpClient;
 }
 
 impl Default for JsonProtocol {
@@ -43,13 +43,13 @@ impl Default for JsonProtocol {
     }
 }
 
-pub struct JsonQuery<'a, C: SnowflakeHttpClient> {
-    session: &'a mut Session<C>,
+pub struct JsonQuery<C: SnowflakeHttpClient> {
+    session: Weak<Mutex<Session<C>>>,
     bindings: Bindings,
     query: String,
 }
 
-impl<'a, C: SnowflakeHttpClient> Query<'a, C> for JsonQuery<'a, C> {
+impl<C: SnowflakeHttpClient> Query<C> for JsonQuery<C> {
     type Result = JsonQueryResult<C>;
     type Describe = JsonDescribeResult;
 
@@ -67,7 +67,7 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for JsonQuery<'a, C> {
         self.bindings.bind_row_named(params);
     }
 
-    fn new(query: impl ToString, session: &'a mut Session<C>) -> Self {
+    fn new(query: impl ToString, session: Weak<Mutex<Session<C>>>) -> Self {
         Self {
             session,
             bindings: Bindings::new(),
@@ -75,7 +75,7 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for JsonQuery<'a, C> {
         }
     }
 
-    async fn describe(mut self) -> Result<JsonDescribeResult, SnowflakeError> {
+    async fn describe(self) -> Result<JsonDescribeResult, SnowflakeError> {
         let query = this_errors!(
             "failed to build underlying binary query",
             BinaryQueryBuilder::default()
@@ -86,7 +86,14 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for JsonQuery<'a, C> {
                 .build()
         );
 
-        let raw = query.run(&mut self.session).await?;
+        let session = self
+            .session
+            .upgrade()
+            .ok_or(error!("The surrounding connection for this query is dead."))?;
+
+        let mut session = session.lock().await;
+
+        let raw = query.run(&mut session).await?;
 
         let cols = raw
             .rowtype
@@ -98,7 +105,7 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for JsonQuery<'a, C> {
         Ok(JsonDescribeResult { columns: cols, raw })
     }
 
-    async fn execute(mut self) -> Result<Self::Result, SnowflakeError> {
+    async fn execute(self) -> Result<Self::Result, SnowflakeError> {
         let query = this_errors!(
             "failed to build underlying binary query",
             BinaryQueryBuilder::default()
@@ -109,7 +116,14 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for JsonQuery<'a, C> {
                 .build()
         );
 
-        let raw = query.run(&mut self.session).await?;
+        let session = self
+            .session
+            .upgrade()
+            .ok_or(error!("The surrounding connection for this query is dead."))?;
+
+        let mut session = session.lock().await;
+
+        let raw = query.run(&mut session).await?;
 
         let cols = raw
             .rowtype
@@ -119,7 +133,7 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for JsonQuery<'a, C> {
             .collect::<Vec<Arc<Column>>>();
 
         Ok(JsonQueryResult {
-            conn: self.session.get_conn(),
+            conn: session.get_conn(),
             raw,
             cols,
         })

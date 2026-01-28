@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    sync::{Mutex, MutexGuard},
-};
+use std::{collections::VecDeque, sync::Arc};
 
 use derive_builder::Builder;
 use futures_util::StreamExt;
@@ -22,6 +19,8 @@ use crate::{
     http::client::SnowflakeHttpClient,
     transaction::SnowflakeTransaction,
 };
+
+use futures_util::lock::Mutex;
 
 #[derive(Builder, Debug, Clone)]
 pub struct SnowflakeConnectionOpts {
@@ -61,7 +60,7 @@ pub struct SnowflakeConnectionOpts {
 
     /// Should parallel chunks be streamed in order? Set this to false for better performance
     #[builder(setter(into), default = true)]
-    pub(crate) download_chunks_in_order: bool
+    pub(crate) download_chunks_in_order: bool,
 }
 
 impl SnowflakeConnectionOpts {
@@ -78,17 +77,17 @@ impl SnowflakeConnectionOpts {
             opts: Arc::new(self),
         };
 
-        let mut sessions = Vec::with_capacity(pool_size);
+        let mut sessions = VecDeque::with_capacity(pool_size);
 
         for _ in 0..pool_size {
             let session = auth::session::Session::new(connection.clone()).await?;
-            sessions.push(Arc::new(Mutex::new(session)));
+            sessions.push_back(session);
         }
 
         Ok(SnowflakePool {
             _protocol: ArrowProtocol::default(),
             conn: connection,
-            pool: sessions,
+            pool: Arc::new(std::sync::Mutex::new(sessions)),
         })
     }
 
@@ -104,17 +103,17 @@ impl SnowflakeConnectionOpts {
             opts: Arc::new(self),
         };
 
-        let mut sessions = Vec::with_capacity(pool_size);
+        let mut sessions = VecDeque::with_capacity(pool_size);
 
         for _ in 0..pool_size {
             let session = auth::session::Session::new(connection.clone()).await?;
-            sessions.push(Arc::new(Mutex::new(session)));
+            sessions.push_back(session);
         }
 
         Ok(SnowflakePool {
             _protocol: JsonProtocol::default(),
             conn: connection,
-            pool: sessions,
+            pool: Arc::new(std::sync::Mutex::new(sessions)),
         })
     }
 
@@ -131,17 +130,17 @@ impl SnowflakeConnectionOpts {
             opts: Arc::new(self),
         };
 
-        let mut sessions = Vec::with_capacity(pool_size);
+        let mut sessions = VecDeque::with_capacity(pool_size);
 
         for _ in 0..pool_size {
             let session = auth::session::Session::new(connection.clone()).await?;
-            sessions.push(Arc::new(Mutex::new(session)));
+            sessions.push_back(session);
         }
 
         Ok(SnowflakePool {
             _protocol: JsonProtocol::default(),
             conn: connection,
-            pool: sessions,
+            pool: Arc::new(std::sync::Mutex::new(sessions)),
         })
     }
 
@@ -158,17 +157,17 @@ impl SnowflakeConnectionOpts {
             opts: Arc::new(self),
         };
 
-        let mut sessions = Vec::with_capacity(pool_size);
+        let mut sessions = VecDeque::with_capacity(pool_size);
 
         for _ in 0..pool_size {
             let session = auth::session::Session::new(connection.clone()).await?;
-            sessions.push(Arc::new(Mutex::new(session)));
+            sessions.push_back(session);
         }
 
         Ok(SnowflakePool {
             _protocol: ArrowProtocol::default(),
             conn: connection,
-            pool: sessions,
+            pool: Arc::new(std::sync::Mutex::new(sessions)),
         })
     }
 }
@@ -199,93 +198,117 @@ where
 pub struct SnowflakePool<C: SnowflakeHttpClient + Clone, T: Protocol> {
     _protocol: T,
     conn: Connection<C>,
-    pub(crate) pool: Vec<Arc<Mutex<Session<C>>>>,
+
+    // Use a std::sync::Mutex here because I won't be holding this lock over an await
+    // and i need to use this in a impl Drop
+    pub(crate) pool: Arc<std::sync::Mutex<VecDeque<Session<C>>>>,
 }
 
 impl<C: SnowflakeHttpClient + Clone, T: Protocol> SnowflakePool<C, T> {
-    pub async fn get<'a>(&'a self) -> Result<SnowflakeConnection<'a, C, T>, SnowflakeError> {
-        let mut conn = self.find_session()?;
-
-        // If a previous connection ran BEGIN, this ensures the next consumer isn't using an existing transaction
-        if conn.session.is_dirty {
-            let q = T::Query::new("ROLLBACK;", &mut conn.session);
-            q.execute().await?;
-        }
-
+    pub async fn get<'a>(&'a self) -> Result<SnowflakeConnection<C, T>, SnowflakeError> {
+        let conn = self.find_session().await?;
         Ok(conn)
     }
 
-    fn find_session<'a>(&'a self) -> Result<SnowflakeConnection<'a, C, T>, SnowflakeError> {
-        for session_lock in &self.pool {
-            if let Ok(guard) = session_lock.try_lock() {
-                return Ok(SnowflakeConnection {
-                    _protocol: self._protocol.clone(),
-                    session: guard,
-                });
+    async fn find_session(&self) -> Result<SnowflakeConnection<C, T>, SnowflakeError> {
+        // Is this generally safe to do??
+        // If the mutex is poisoned i should want to crash the program right?
+        let session = {
+            let mut pool = self.pool.lock().unwrap();
+            pool.pop_front()
+        };
+
+        if let Some(session) = session {
+            let is_session_dirty = session.is_dirty;
+            let session_wrapped = Arc::new(Mutex::new(session));
+            let weak = Arc::downgrade(&session_wrapped);
+
+            // If a previous connection ran BEGIN, this ensures the next consumer isn't using an existing transaction
+            if is_session_dirty {
+                let q = T::Query::new("ROLLBACK;", weak);
+                q.execute().await?;
             }
+
+            return Ok(SnowflakeConnection {
+                _protocol: self._protocol.clone(),
+                session: Some(session_wrapped),
+                pool: self.pool.clone(),
+            });
         }
 
         Err(error!("no available sessions"))
     }
 
     pub async fn begin(&self) -> Result<SnowflakeTransaction<C, T>, SnowflakeError> {
-        let mut session = auth::session::Session::new(self.conn.clone()).await?;
-        let q = T::Query::new("BEGIN;", &mut session);
-        q.execute().await?;
-        Ok(SnowflakeTransaction::new(self._protocol.clone(), session))
+        let session = auth::session::Session::new(self.conn.clone()).await?;
+        let mut transaction = SnowflakeTransaction::new(self._protocol.clone(), session);
+        transaction.query("BEGIN;").await?.execute().await?;
+        Ok(transaction)
     }
 }
 
-pub struct SnowflakeConnection<'a, C: SnowflakeHttpClient + Clone, T: Protocol> {
+pub struct SnowflakeConnection<C: SnowflakeHttpClient + Clone, T: Protocol> {
     _protocol: T,
-    pub(crate) session: MutexGuard<'a, Session<C>>,
+
+    // I use a futures_util::lock::Mutex for Session is expected to be locked over an await point
+    pub(crate) session: Option<Arc<futures_util::lock::Mutex<Session<C>>>>,
+
+    // I use a std::sync::Mutex here because the pool lock is only expected to be held for a very
+    // short amount of time. It is not expected to be held over an await point
+    pub(crate) pool: Arc<std::sync::Mutex<VecDeque<Session<C>>>>,
 }
 
-impl<'a, C: SnowflakeHttpClient, T: Protocol> Drop for SnowflakeConnection<'a, C, T> {
+impl<'a, C: SnowflakeHttpClient, T: Protocol> Drop for SnowflakeConnection<C, T> {
     fn drop(&mut self) {
-        self.session.is_dirty = true;
+        if let Some(session) = self.session.take() {
+            let mut pool = self.pool.lock().unwrap();
+            if let Some(session) = Arc::into_inner(session) {
+                let mut session = session.into_inner();
+                session.is_dirty = true;
+                pool.push_back(session);
+            }
+        }
     }
 }
 
-impl<'a, C: SnowflakeHttpClient, T: Protocol> Executor<'a, C, T> for SnowflakeConnection<'a, C, T> {
-    async fn query<'b>(
-        &'b mut self,
-        query: impl ToString,
-    ) -> Result<T::Query<'b, C>, crate::SnowflakeError>
-    where
-        'a: 'b,
-    {
-        let query = T::Query::new(query, &mut self.session);
-        Ok(query)
-    }
-
-    async fn fetch_all<'b>(
-        &'b mut self,
-        query: impl ToString,
-    ) -> Result<Vec<Row>, crate::SnowflakeError>
-    where
-        'a: 'b,
-    {
-        let query = T::Query::new(query, &mut self.session);
-
-        let results = query.execute().await?;
-        let expected_result_len = results.expected_result_length();
-
-        let mut rows = Vec::with_capacity(expected_result_len as usize);
-        let mut row_stream = results.rows();
-
-        while let Some(row) = row_stream.next().await {
-            let row = row?;
-            rows.push(row);
+impl<C: SnowflakeHttpClient, T: Protocol> Executor<C, T> for SnowflakeConnection<C, T> {
+    async fn query(&mut self, query: impl ToString) -> Result<T::Query<C>, crate::SnowflakeError> {
+        if let Some(existing) = self.session.as_ref() {
+            let weak = Arc::downgrade(existing);
+            let query = T::Query::new(query, weak);
+            Ok(query)
+        } else {
+            Err(error!(
+                "The underlying session for this connection is dead."
+            ))
         }
-
-        Ok(rows)
     }
 
-    async fn ping<'b>(&'b mut self) -> Result<(), crate::SnowflakeError>
-    where
-        'a: 'b,
-    {
+    async fn fetch_all(&mut self, query: impl ToString) -> Result<Vec<Row>, crate::SnowflakeError> {
+        if let Some(existing) = self.session.as_ref() {
+            let weak = Arc::downgrade(existing);
+            let query = T::Query::new(query, weak);
+
+            let results = query.execute().await?;
+            let expected_result_len = results.expected_result_length();
+
+            let mut rows = Vec::with_capacity(expected_result_len as usize);
+            let mut row_stream = results.rows();
+
+            while let Some(row) = row_stream.next().await {
+                let row = row?;
+                rows.push(row);
+            }
+
+            Ok(rows)
+        } else {
+            Err(error!(
+                "The underlying session for this connection is dead."
+            ))
+        }
+    }
+
+    async fn ping(&mut self) -> Result<(), crate::SnowflakeError> {
         self.fetch_all("SELECT 1;").await?;
         Ok(())
     }

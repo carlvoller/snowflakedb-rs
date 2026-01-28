@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
-use futures_util::stream::BoxStream;
+use futures_util::{lock::Mutex, stream::BoxStream};
 
 use crate::{
     SnowflakeError,
@@ -12,11 +12,11 @@ use crate::{
     http::client::SnowflakeHttpClient,
 };
 
-pub trait Query<'a, C: SnowflakeHttpClient> {
+pub trait Query<C: SnowflakeHttpClient> {
     type Result: QueryResult;
     type Describe: DescribeResult;
 
-    fn new(query: impl ToString, session: &'a mut Session<C>) -> Self;
+    fn new(query: impl ToString, session: Weak<Mutex<Session<C>>>) -> Self;
 
     fn bind_row(&mut self, params: Vec<impl ToCellValue>);
     fn bind_row_named(&mut self, params: Vec<(impl ToString, impl ToCellValue)>);

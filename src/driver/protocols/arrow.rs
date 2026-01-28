@@ -1,4 +1,7 @@
-use std::{str::FromStr, sync::Arc};
+use std::{
+    str::FromStr,
+    sync::{Arc, Weak},
+};
 
 use arrow_array::{Array, timezone::Tz};
 use arrow_ipc::reader::StreamReader;
@@ -7,7 +10,7 @@ use async_stream::try_stream;
 #[cfg(feature = "decimal")]
 use bigdecimal::{BigDecimal, FromPrimitive};
 use chrono::TimeZone;
-use futures_util::TryStreamExt;
+use futures_util::{TryStreamExt, lock::Mutex};
 
 use crate::{
     CellValue, Column, ColumnType, Query, QueryResult, Row, SnowflakeError, SnowflakeHttpClient,
@@ -29,10 +32,10 @@ use crate::{
 pub struct ArrowProtocol {}
 
 impl Protocol for ArrowProtocol {
-    type Query<'a, C>
-        = ArrowQuery<'a, C>
+    type Query<C>
+        = ArrowQuery<C>
     where
-        C: SnowflakeHttpClient + 'a;
+        C: SnowflakeHttpClient;
 }
 
 impl Default for ArrowProtocol {
@@ -41,17 +44,17 @@ impl Default for ArrowProtocol {
     }
 }
 
-pub struct ArrowQuery<'a, C: SnowflakeHttpClient> {
-    session: &'a mut Session<C>,
+pub struct ArrowQuery<C: SnowflakeHttpClient> {
+    session: Weak<Mutex<Session<C>>>,
     bindings: Bindings,
     query: String,
 }
 
-impl<'a, C: SnowflakeHttpClient> Query<'a, C> for ArrowQuery<'a, C> {
+impl<C: SnowflakeHttpClient> Query<C> for ArrowQuery<C> {
     type Result = ArrowQueryResult<C>;
     type Describe = ArrowDescribeResult;
 
-    fn new(query: impl ToString, session: &'a mut Session<C>) -> Self {
+    fn new(query: impl ToString, session: Weak<Mutex<Session<C>>>) -> Self {
         Self {
             session,
             bindings: Bindings::new(),
@@ -67,7 +70,7 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for ArrowQuery<'a, C> {
         self.bindings.bind_row_named(params);
     }
 
-    async fn execute(mut self) -> Result<Self::Result, crate::SnowflakeError> {
+    async fn execute(self) -> Result<Self::Result, crate::SnowflakeError> {
         let query = this_errors!(
             "failed to build underlying binary query",
             BinaryQueryBuilder::default()
@@ -78,7 +81,14 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for ArrowQuery<'a, C> {
                 .build()
         );
 
-        let raw = query.run(&mut self.session).await?;
+        let session = self
+            .session
+            .upgrade()
+            .ok_or(error!("The surrounding connection for this query is dead."))?;
+
+        let mut session = session.lock().await;
+
+        let raw = query.run(&mut session).await?;
 
         let cols = raw
             .rowtype
@@ -88,13 +98,13 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for ArrowQuery<'a, C> {
             .collect::<Vec<Arc<Column>>>();
 
         Ok(ArrowQueryResult {
-            conn: self.session.get_conn(),
+            conn: session.get_conn(),
             raw,
             cols,
         })
     }
 
-    async fn describe(mut self) -> Result<ArrowDescribeResult, crate::SnowflakeError> {
+    async fn describe(self) -> Result<ArrowDescribeResult, crate::SnowflakeError> {
         let query = this_errors!(
             "failed to build underlying binary query",
             BinaryQueryBuilder::default()
@@ -105,7 +115,14 @@ impl<'a, C: SnowflakeHttpClient> Query<'a, C> for ArrowQuery<'a, C> {
                 .build()
         );
 
-        let raw = query.run(&mut self.session).await?;
+        let session = self
+            .session
+            .upgrade()
+            .ok_or(error!("The surrounding connection for this query is dead."))?;
+
+        let mut session = session.lock().await;
+
+        let raw = query.run(&mut session).await?;
 
         let cols = raw
             .rowtype

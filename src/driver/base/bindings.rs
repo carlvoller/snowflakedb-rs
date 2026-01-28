@@ -2,9 +2,12 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::driver::primitives::{
-    cell::{CellValue, ToCellValue, value_to_name},
-    column::ColumnType,
+use crate::{
+    Column,
+    driver::primitives::{
+        cell::{CellValue, ToCellValue, value_to_name},
+        column::ColumnType,
+    },
 };
 
 // This has the same structure as Column, but I'm seperating them
@@ -19,6 +22,18 @@ pub struct BindMetadata {
     pub precision: Option<i64>,
     pub scale: Option<i64>,
     pub nullable: bool,
+}
+
+impl From<BindMetadata> for Column {
+    fn from(bind: BindMetadata) -> Self {
+        Column {
+            col_type: bind.col_type,
+            name: bind.name,
+            precision: bind.precision,
+            scale: bind.scale,
+            nullable: bind.nullable,
+        }
+    }
 }
 
 #[derive(Serialize, Clone, Debug)]

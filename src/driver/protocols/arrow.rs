@@ -314,6 +314,23 @@ impl ArrowDescribeResult {
             row_types_to_arrow_schema(&self.columns)
         }
     }
+
+    pub fn params_schema(&self) -> arrow_schema::Schema {
+        if let Some(binds) = self.bind_metadata() {
+            let binds_as_cols: Vec<Arc<Column>> = binds
+                .iter()
+                .map(|x| Arc::new(x.to_owned().into()))
+                .collect();
+
+            row_types_to_arrow_schema(binds_as_cols.as_slice())
+        } else {
+            let fields = (0..self.bind_count())
+                .map(|x| Field::new(format!("{x}"), arrow_schema::DataType::Utf8, false))
+                .collect::<Vec<Field>>();
+
+            arrow_schema::Schema::new(fields)
+        }
+    }
 }
 
 fn transform_record_batch(

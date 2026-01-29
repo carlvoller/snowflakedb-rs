@@ -34,16 +34,16 @@ pub struct SnowflakeConnectionOpts {
     #[builder(setter(into))]
     pub(crate) username: String,
 
-    #[builder(setter(into, strip_option))]
+    #[builder(setter(into, strip_option), default = None)]
     pub(crate) database: Option<String>,
 
-    #[builder(setter(into, strip_option))]
+    #[builder(setter(into, strip_option), default = None)]
     pub(crate) schema: Option<String>,
 
-    #[builder(setter(into, strip_option))]
+    #[builder(setter(into, strip_option), default = None)]
     pub(crate) role: Option<String>,
 
-    #[builder(setter(into, strip_option))]
+    #[builder(setter(into, strip_option), default = None)]
     pub(crate) warehouse: Option<String>,
 
     /// Override the Snowflake API endpoint used. Useful for region specific or private snowflake instances.

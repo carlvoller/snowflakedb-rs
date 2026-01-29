@@ -25,6 +25,33 @@ pub enum ColumnType {
     NotSupported,
 }
 
+impl ColumnType {
+    pub fn name(&self) -> String {
+        match self {
+            ColumnType::Fixed => "FIXED",
+            ColumnType::Real => "REAL",
+            ColumnType::Decfloat => "DECFLOAT",
+            ColumnType::Text => "TEXT",
+            ColumnType::Date => "DATE",
+            ColumnType::Variant => "VARIANT",
+            ColumnType::TimestampLtz => "TIMESTAMP_LTZ",
+            ColumnType::TimestampNtz => "TIMESTAMP_NTZ",
+            ColumnType::TimestampTz => "TIMESTAMP_TZ",
+            ColumnType::Object => "OBJECT",
+            ColumnType::Array => "ARRAY",
+            ColumnType::Map => "MAP",
+            ColumnType::Binary => "BINARY",
+            ColumnType::Time => "TIME",
+            ColumnType::Boolean => "BOOLEAN",
+            ColumnType::Null => "NULL",
+            ColumnType::Slice => "SLICE",
+            ColumnType::ChangeType => "CHANGE_TYPE",
+            ColumnType::NotSupported => "NOT_SUPPORTED",
+        }
+        .to_string()
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 /// Describes a column in a [`QueryResult`](`crate::driver::query::QueryResult`)

@@ -499,10 +499,15 @@ fn arrow_response_to_arrow_snowflake(
 ) -> Result<(arrow_schema::DataType, arrow_array::ArrayRef), crate::SnowflakeError> {
     match snowflake_column.col_type {
         ColumnType::Fixed | ColumnType::Decfloat => {
-            let target_type = arrow_schema::DataType::Decimal128(
-                snowflake_column.precision.unwrap() as u8,
-                snowflake_column.scale.unwrap() as i8,
-            );
+            let target_type = if snowflake_column.scale.unwrap() == 0 {
+                arrow_schema::DataType::Int64
+            } else {
+                arrow_schema::DataType::Decimal128(
+                    snowflake_column.precision.unwrap() as u8,
+                    snowflake_column.scale.unwrap() as i8,
+                )
+            };
+
             let casted_array = this_errors!(
                 "failed to cast arrow array",
                 arrow_cast::cast(&array, &target_type)

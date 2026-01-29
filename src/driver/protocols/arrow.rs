@@ -135,6 +135,83 @@ impl<C: SnowflakeHttpClient> Query<C> for ArrowQuery<C> {
     }
 }
 
+impl<C: SnowflakeHttpClient> ArrowQuery<C> {
+    /// Binds this RecordBatch to the query as anonymous parameters.
+    pub fn bind_record_batch_as_params(
+        &mut self,
+        record_batch: arrow_array::RecordBatch,
+    ) -> Result<(), crate::SnowflakeError> {
+        let row_count = record_batch.num_rows();
+        let col_count = record_batch.num_columns();
+        for row_idx in 0..row_count {
+            let cells = (0..col_count)
+                .map(
+                    |col_idx| -> Result<(String, CellValue), crate::SnowflakeError> {
+                        Ok((
+                            col_idx.to_string(),
+                            arrow_to_cell_value(record_batch.column(col_idx), row_idx)?,
+                        ))
+                    },
+                )
+                .collect::<Result<Vec<(String, CellValue)>, crate::SnowflakeError>>()?;
+            self.bind_row_named(cells);
+        }
+
+        Ok(())
+    }
+
+    /// Binds this RecordBatch to the query as named parameters, where the name of the Field is used as the bind name.
+    pub fn bind_record_batch_as_params_named(
+        &mut self,
+        record_batch: arrow_array::RecordBatch,
+    ) -> Result<(), crate::SnowflakeError> {
+        let row_count = record_batch.num_rows();
+        let col_count = record_batch.num_columns();
+        for row_idx in 0..row_count {
+            let cells = (0..col_count)
+                .map(
+                    |col_idx| -> Result<(String, CellValue), crate::SnowflakeError> {
+                        Ok((
+                            record_batch.schema().field(col_idx).name().to_string(),
+                            arrow_to_cell_value(record_batch.column(col_idx), row_idx)?,
+                        ))
+                    },
+                )
+                .collect::<Result<Vec<(String, CellValue)>, crate::SnowflakeError>>()?;
+            self.bind_row_named(cells);
+        }
+
+        Ok(())
+    }
+
+    /// Binds this RecordBatch to the query as named parameters, where the supplied names are used for each corresponding binds' name.
+    ///
+    /// For example, passing `&[String("My_Column_1"), String("My_Column_2")]` will bind the RecordBatch first column to named parameter "My_Column_1", second column to "My_Column_2", etc.
+    pub fn bind_record_batch_as_params_with_names(
+        &mut self,
+        record_batch: arrow_array::RecordBatch,
+        names: &[String],
+    ) -> Result<(), crate::SnowflakeError> {
+        let row_count = record_batch.num_rows();
+        let col_count = record_batch.num_columns();
+        for row_idx in 0..row_count {
+            let cells = (0..col_count)
+                .map(
+                    |col_idx| -> Result<(String, CellValue), crate::SnowflakeError> {
+                        Ok((
+                            names[col_idx].clone(),
+                            arrow_to_cell_value(record_batch.column(col_idx), row_idx)?,
+                        ))
+                    },
+                )
+                .collect::<Result<Vec<(String, CellValue)>, crate::SnowflakeError>>()?;
+            self.bind_row_named(cells);
+        }
+
+        Ok(())
+    }
+}
+
 pub struct ArrowQueryResult<C: SnowflakeHttpClient + Clone> {
     conn: Connection<C>,
     raw: RawQueryResponse,
@@ -218,7 +295,7 @@ impl<C: SnowflakeHttpClient + Clone> QueryResult for ArrowQueryResult<C> {
                             let row = batch
                                 .columns()
                                 .iter()
-                                .map(|col| arrow_to_cell_value(col, idx).map(|x| x.unwrap_or(CellValue::Null)))
+                                .map(|col| arrow_to_cell_value(col, idx))
                                 .collect::<Result<Vec<CellValue>, crate::SnowflakeError>>()?;
                             yield Row::new_from_cell_values(cols.clone(), row, cursor);
                             cursor += 1;
@@ -520,16 +597,16 @@ fn arrow_response_to_arrow_snowflake(
 fn arrow_to_cell_value(
     array: &dyn Array,
     row_idx: usize,
-) -> Result<Option<CellValue>, crate::SnowflakeError> {
+) -> Result<CellValue, crate::SnowflakeError> {
     Ok(match array.data_type() {
-        arrow_schema::DataType::Null => Some(CellValue::Null),
-        arrow_schema::DataType::Boolean => Some(CellValue::Boolean(
+        arrow_schema::DataType::Null => CellValue::Null,
+        arrow_schema::DataType::Boolean => CellValue::Boolean(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::BooleanArray>()
                 .map(|x| x.value(row_idx)),
-        )),
-        arrow_schema::DataType::Int8 => Some(CellValue::Fixed(
+        ),
+        arrow_schema::DataType::Int8 => CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::Int8Array>()
@@ -540,8 +617,8 @@ fn arrow_to_cell_value(
                     return BigDecimal::from_i8(x.value(row_idx));
                 })
                 .flatten(),
-        )),
-        arrow_schema::DataType::Int16 => Some(CellValue::Fixed(
+        ),
+        arrow_schema::DataType::Int16 => CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::Int16Array>()
@@ -552,8 +629,8 @@ fn arrow_to_cell_value(
                     return BigDecimal::from_i16(x.value(row_idx));
                 })
                 .flatten(),
-        )),
-        arrow_schema::DataType::Int32 => Some(CellValue::Fixed(
+        ),
+        arrow_schema::DataType::Int32 => CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::Int32Array>()
@@ -564,8 +641,8 @@ fn arrow_to_cell_value(
                     return BigDecimal::from_i32(x.value(row_idx));
                 })
                 .flatten(),
-        )),
-        arrow_schema::DataType::Int64 => Some(CellValue::Fixed(
+        ),
+        arrow_schema::DataType::Int64 => CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::Int64Array>()
@@ -576,8 +653,8 @@ fn arrow_to_cell_value(
                     return BigDecimal::from_i64(x.value(row_idx));
                 })
                 .flatten(),
-        )),
-        arrow_schema::DataType::UInt8 => Some(CellValue::Fixed(
+        ),
+        arrow_schema::DataType::UInt8 => CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::UInt8Array>()
@@ -588,8 +665,8 @@ fn arrow_to_cell_value(
                     return BigDecimal::from_u8(x.value(row_idx));
                 })
                 .flatten(),
-        )),
-        arrow_schema::DataType::UInt16 => Some(CellValue::Fixed(
+        ),
+        arrow_schema::DataType::UInt16 => CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::UInt16Array>()
@@ -600,8 +677,8 @@ fn arrow_to_cell_value(
                     return BigDecimal::from_u16(x.value(row_idx));
                 })
                 .flatten(),
-        )),
-        arrow_schema::DataType::UInt32 => Some(CellValue::Fixed(
+        ),
+        arrow_schema::DataType::UInt32 => CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::UInt32Array>()
@@ -612,8 +689,8 @@ fn arrow_to_cell_value(
                     return BigDecimal::from_u32(x.value(row_idx));
                 })
                 .flatten(),
-        )),
-        arrow_schema::DataType::UInt64 => Some(CellValue::Fixed(
+        ),
+        arrow_schema::DataType::UInt64 => CellValue::Fixed(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::UInt64Array>()
@@ -624,25 +701,25 @@ fn arrow_to_cell_value(
                     return BigDecimal::from_u64(x.value(row_idx));
                 })
                 .flatten(),
-        )),
-        arrow_schema::DataType::Float16 => Some(CellValue::Real(
+        ),
+        arrow_schema::DataType::Float16 => CellValue::Real(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::Float16Array>()
                 .map(|x| x.value(row_idx).to_f64()),
-        )),
-        arrow_schema::DataType::Float32 => Some(CellValue::Real(
+        ),
+        arrow_schema::DataType::Float32 => CellValue::Real(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::Float32Array>()
                 .map(|x| x.value(row_idx) as f64),
-        )),
-        arrow_schema::DataType::Float64 => Some(CellValue::Real(
+        ),
+        arrow_schema::DataType::Float64 => CellValue::Real(
             array
                 .as_any()
                 .downcast_ref::<arrow_array::Float64Array>()
                 .map(|x| x.value(row_idx) as f64),
-        )),
+        ),
         arrow_schema::DataType::Timestamp(unit, zone) => {
             use arrow_schema::TimeUnit;
 
@@ -678,31 +755,35 @@ fn arrow_to_cell_value(
                             .map(|x| x.fixed_offset())
                     })
                     .flatten();
-                Some(CellValue::TimestampTz(ts))
+                CellValue::TimestampTz(ts)
             } else {
-                Some(CellValue::TimestampNtz(naive_ts))
+                CellValue::TimestampNtz(naive_ts)
             }
         }
         arrow_schema::DataType::Date32 => array
             .as_any()
             .downcast_ref::<arrow_array::Date32Array>()
-            .map(|x| CellValue::Date(x.value_as_date(row_idx))),
+            .map(|x| CellValue::Date(x.value_as_date(row_idx)))
+            .unwrap_or(CellValue::Date(None)),
         arrow_schema::DataType::Date64 => array
             .as_any()
             .downcast_ref::<arrow_array::Date64Array>()
-            .map(|x| CellValue::TimestampNtz(x.value_as_datetime(row_idx))),
+            .map(|x| CellValue::TimestampNtz(x.value_as_datetime(row_idx)))
+            .unwrap_or(CellValue::TimestampNtz(None)),
         arrow_schema::DataType::Time32(time_unit) => {
             use arrow_schema::TimeUnit;
             match time_unit {
                 TimeUnit::Second => array
                     .as_any()
                     .downcast_ref::<arrow_array::Time32SecondArray>()
-                    .map(|x| CellValue::Time(x.value_as_time(row_idx))),
+                    .map(|x| CellValue::Time(x.value_as_time(row_idx)))
+                    .unwrap_or(CellValue::Time(None)),
                 TimeUnit::Millisecond => array
                     .as_any()
                     .downcast_ref::<arrow_array::Time32MillisecondArray>()
-                    .map(|x| CellValue::Time(x.value_as_time(row_idx))),
-                _ => Some(CellValue::Time(None)),
+                    .map(|x| CellValue::Time(x.value_as_time(row_idx)))
+                    .unwrap_or(CellValue::Time(None)),
+                _ => CellValue::Time(None),
             }
         }
         arrow_schema::DataType::Time64(time_unit) => {
@@ -711,12 +792,14 @@ fn arrow_to_cell_value(
                 TimeUnit::Microsecond => array
                     .as_any()
                     .downcast_ref::<arrow_array::Time64MicrosecondArray>()
-                    .map(|x| CellValue::Time(x.value_as_time(row_idx))),
+                    .map(|x| CellValue::Time(x.value_as_time(row_idx)))
+                    .unwrap_or(CellValue::Time(None)),
                 TimeUnit::Nanosecond => array
                     .as_any()
                     .downcast_ref::<arrow_array::Time64NanosecondArray>()
-                    .map(|x| CellValue::Time(x.value_as_time(row_idx))),
-                _ => Some(CellValue::Time(None)),
+                    .map(|x| CellValue::Time(x.value_as_time(row_idx)))
+                    .unwrap_or(CellValue::Time(None)),
+                _ => CellValue::Time(None),
             }
         }
         arrow_schema::DataType::Duration(time_unit) => {
@@ -725,19 +808,23 @@ fn arrow_to_cell_value(
                 TimeUnit::Second => array
                     .as_any()
                     .downcast_ref::<arrow_array::DurationSecondArray>()
-                    .map(|x| CellValue::Time(x.value_as_time(row_idx))),
+                    .map(|x| CellValue::Time(x.value_as_time(row_idx)))
+                    .unwrap_or(CellValue::Time(None)),
                 TimeUnit::Millisecond => array
                     .as_any()
                     .downcast_ref::<arrow_array::DurationMillisecondArray>()
-                    .map(|x| CellValue::Time(x.value_as_time(row_idx))),
+                    .map(|x| CellValue::Time(x.value_as_time(row_idx)))
+                    .unwrap_or(CellValue::Time(None)),
                 TimeUnit::Microsecond => array
                     .as_any()
                     .downcast_ref::<arrow_array::DurationMicrosecondArray>()
-                    .map(|x| CellValue::Time(x.value_as_time(row_idx))),
+                    .map(|x| CellValue::Time(x.value_as_time(row_idx)))
+                    .unwrap_or(CellValue::Time(None)),
                 TimeUnit::Nanosecond => array
                     .as_any()
                     .downcast_ref::<arrow_array::DurationNanosecondArray>()
-                    .map(|x| CellValue::Time(x.value_as_time(row_idx))),
+                    .map(|x| CellValue::Time(x.value_as_time(row_idx)))
+                    .unwrap_or(CellValue::Time(None)),
             }
         }
         arrow_schema::DataType::Interval(_) => {
@@ -748,35 +835,42 @@ fn arrow_to_cell_value(
             .as_any()
             .downcast_ref::<arrow_array::BinaryArray>()
             // FIXME: Is there a better way to return this without cloning the data?
-            .map(|x| CellValue::Binary(Some(x.value_data().to_vec()))),
+            .map(|x| CellValue::Binary(Some(x.value_data().to_vec())))
+            .unwrap_or(CellValue::Binary(None)),
         arrow_schema::DataType::FixedSizeBinary(_) => array
             .as_any()
             .downcast_ref::<arrow_array::FixedSizeBinaryArray>()
             // FIXME: Is there a better way to return this without cloning the data?
-            .map(|x| CellValue::Binary(Some(x.value_data().to_vec()))),
+            .map(|x| CellValue::Binary(Some(x.value_data().to_vec())))
+            .unwrap_or(CellValue::Binary(None)),
         arrow_schema::DataType::LargeBinary => array
             .as_any()
             .downcast_ref::<arrow_array::LargeBinaryArray>()
             // FIXME: Is there a better way to return this without cloning the data?
-            .map(|x| CellValue::Binary(Some(x.value_data().to_vec()))),
+            .map(|x| CellValue::Binary(Some(x.value_data().to_vec())))
+            .unwrap_or(CellValue::Binary(None)),
         arrow_schema::DataType::BinaryView => array
             .as_any()
             .downcast_ref::<arrow_array::BinaryViewArray>()
             // FIXME: Is there a better way to return this without cloning the data?
             // Maybe supporting std::io::Chain and std::io::Cursor might be a good idea
-            .map(|x| CellValue::Binary(Some(x.value(row_idx).to_vec()))),
+            .map(|x| CellValue::Binary(Some(x.value(row_idx).to_vec())))
+            .unwrap_or(CellValue::Binary(None)),
         arrow_schema::DataType::Utf8 => array
             .as_any()
             .downcast_ref::<arrow_array::StringArray>()
-            .map(|x| CellValue::Text(Some(x.value(row_idx).to_string()))),
+            .map(|x| CellValue::Text(Some(x.value(row_idx).to_string())))
+            .unwrap_or(CellValue::Text(None)),
         arrow_schema::DataType::LargeUtf8 => array
             .as_any()
             .downcast_ref::<arrow_array::LargeStringArray>()
-            .map(|x| CellValue::Text(Some(x.value(row_idx).to_string()))),
+            .map(|x| CellValue::Text(Some(x.value(row_idx).to_string())))
+            .unwrap_or(CellValue::Text(None)),
         arrow_schema::DataType::Utf8View => array
             .as_any()
             .downcast_ref::<arrow_array::StringViewArray>()
-            .map(|x| CellValue::Text(Some(x.value(row_idx).to_string()))),
+            .map(|x| CellValue::Text(Some(x.value(row_idx).to_string())))
+            .unwrap_or(CellValue::Text(None)),
 
         #[cfg(feature = "decimal")]
         arrow_schema::DataType::Decimal32(_, scale) => {
@@ -793,6 +887,7 @@ fn arrow_to_cell_value(
                         .map(|big| CellValue::Decfloat(Some(BigDecimal::new(big, *scale as i64))))
                 })
                 .flatten()
+                .unwrap_or(CellValue::Decfloat(None))
         }
 
         #[cfg(feature = "decimal")]
@@ -810,6 +905,7 @@ fn arrow_to_cell_value(
                         .map(|big| CellValue::Decfloat(Some(BigDecimal::new(big, *scale as i64))))
                 })
                 .flatten()
+                .unwrap_or(CellValue::Decfloat(None))
         }
 
         #[cfg(feature = "decimal")]
@@ -827,6 +923,7 @@ fn arrow_to_cell_value(
                         .map(|big| CellValue::Decfloat(Some(BigDecimal::new(big, *scale as i64))))
                 })
                 .flatten()
+                .unwrap_or(CellValue::Decfloat(None))
         }
 
         #[cfg(feature = "decimal")]
@@ -838,12 +935,14 @@ fn arrow_to_cell_value(
                 .downcast_ref::<arrow_array::Decimal256Array>()
                 .map(|x| x.value(row_idx));
 
-            value_as_primitive.map(|x| {
-                CellValue::Decfloat(Some(BigDecimal::new(
-                    BigInt::from_signed_bytes_le(&x.to_le_bytes()),
-                    *scale as i64,
-                )))
-            })
+            value_as_primitive
+                .map(|x| {
+                    CellValue::Decfloat(Some(BigDecimal::new(
+                        BigInt::from_signed_bytes_le(&x.to_le_bytes()),
+                        *scale as i64,
+                    )))
+                })
+                .unwrap_or(CellValue::Decfloat(None))
         }
 
         #[cfg(not(feature = "decimal"))]
@@ -852,7 +951,8 @@ fn arrow_to_cell_value(
             .downcast_ref::<arrow_array::Decimal32Array>()
             .map(|x| {
                 CellValue::Decfloat(Some((x.value(row_idx) as f64) * 10f64.powf(*scale as f64)))
-            }),
+            })
+            .unwrap_or(CellValue::Decfloat(None)),
 
         #[cfg(not(feature = "decimal"))]
         arrow_schema::DataType::Decimal64(_, scale) => array
@@ -860,7 +960,8 @@ fn arrow_to_cell_value(
             .downcast_ref::<arrow_array::Decimal64Array>()
             .map(|x| {
                 CellValue::Decfloat(Some((x.value(row_idx) as f64) * 10f64.powf(*scale as f64)))
-            }),
+            })
+            .unwrap_or(CellValue::Decfloat(None)),
 
         #[cfg(not(feature = "decimal"))]
         arrow_schema::DataType::Decimal128(_, scale) => array
@@ -868,7 +969,8 @@ fn arrow_to_cell_value(
             .downcast_ref::<arrow_array::Decimal128Array>()
             .map(|x| {
                 CellValue::Decfloat(Some((x.value(row_idx) as f64) * 10f64.powf(*scale as f64)))
-            }),
+            })
+            .unwrap_or(CellValue::Decfloat(None)),
 
         #[cfg(not(feature = "decimal"))]
         // Not very precise, use `decimal` crate for better precision
@@ -879,7 +981,8 @@ fn arrow_to_cell_value(
                 CellValue::Decfloat(Some(
                     (x.value(row_idx).as_i128() as f64) * 10f64.powf(*scale as f64),
                 ))
-            }),
+            })
+            .unwrap_or(CellValue::Decfloat(None)),
 
         arrow_schema::DataType::List(_) => {
             // FIXME: How can I represent a List into a CellValue? Recursively parse it into a serde_json::Value maybe?

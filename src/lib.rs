@@ -17,54 +17,48 @@ pub use driver::{
         column::{Column, ColumnType},
         row::Row,
     },
-    protocols::{JsonDescribeResult, JsonProtocol, JsonQuery, JsonQueryResult},
+    protocols::{JsonDescribeResult, JsonProtocol},
     query::{DescribeResult, Query, QueryResult},
 };
 
 pub use transaction::SnowflakeTransaction;
 
-#[cfg(feature = "reqwest")]
-pub type JsonSnowflakeConnection<C = reqwest::Client> = SnowflakeConnection<C, JsonProtocol>;
-
-#[cfg(not(feature = "reqwest"))]
-pub type JsonSnowflakeConnection<C> = SnowflakeConnection<C, JsonProtocol>;
+pub struct NoClient;
 
 #[cfg(feature = "reqwest")]
-pub type JsonSnowflakeTransaction<C = reqwest::Client> = SnowflakeTransaction<C, JsonProtocol>;
+pub type DefaultClient = reqwest::Client;
 
 #[cfg(not(feature = "reqwest"))]
-pub type JsonSnowflakeTransaction<C> = SnowflakeTransaction<C, JsonProtocol>;
+pub type DefaultClient = NoClient;
 
-#[cfg(feature = "reqwest")]
-pub type JsonSnowflakePool<C = reqwest::Client> = SnowflakePool<C, JsonProtocol>;
+pub type JsonSnowflakeConnection<C = DefaultClient> = SnowflakeConnection<C, JsonProtocol>;
+pub type JsonSnowflakeTransaction<C = DefaultClient> = SnowflakeTransaction<C, JsonProtocol>;
+pub type JsonSnowflakePool<C = DefaultClient> = SnowflakePool<C, JsonProtocol>;
+pub type JsonQuery<C = DefaultClient> = JQ<C>;
+pub type JsonQueryResult<C = DefaultClient> = JQR<C>;
 
-#[cfg(not(feature = "reqwest"))]
-pub type JsonSnowflakePool<C> = SnowflakePool<C, JsonProtocol>;
-
-#[cfg(all(feature = "reqwest", feature = "arrow"))]
-pub type ArrowSnowflakeConnection<C = reqwest::Client> = SnowflakeConnection<C, ArrowProtocol>;
-
-#[cfg(all(not(feature = "reqwest"), feature = "arrow"))]
-pub type ArrowSnowflakeConnection<C> = SnowflakeConnection<C, ArrowProtocol>;
-
-#[cfg(all(feature = "reqwest", feature = "arrow"))]
-pub type ArrowSnowflakeTransaction<C = reqwest::Client> = SnowflakeTransaction<C, ArrowProtocol>;
-
-#[cfg(all(not(feature = "reqwest"), feature = "arrow"))]
-pub type ArrowSnowflakeTransaction<C> = SnowflakeTransaction<C, ArrowProtocol>;
-
-#[cfg(all(feature = "reqwest", feature = "arrow"))]
-pub type ArrowSnowflakePool<C = reqwest::Client> = SnowflakePool<C, ArrowProtocol>;
-
-#[cfg(all(not(feature = "reqwest"), feature = "arrow"))]
-pub type ArrowSnowflakePool<C> = SnowflakePool<C, ArrowProtocol>;
+use crate::driver::protocols::{JsonQuery as JQ, JsonQueryResult as JQR};
 
 #[cfg(feature = "arrow")]
-pub use driver::protocols::{ArrowDescribeResult, ArrowProtocol, ArrowQuery, ArrowQueryResult};
+pub type ArrowSnowflakeConnection<C = DefaultClient> = SnowflakeConnection<C, ArrowProtocol>;
+#[cfg(feature = "arrow")]
+pub type ArrowSnowflakeTransaction<C = DefaultClient> = SnowflakeTransaction<C, ArrowProtocol>;
+#[cfg(feature = "arrow")]
+pub type ArrowSnowflakePool<C = DefaultClient> = SnowflakePool<C, ArrowProtocol>;
+#[cfg(feature = "arrow")]
+pub type ArrowQuery<C = DefaultClient> = AQ<C>;
+#[cfg(feature = "arrow")]
+pub type ArrowQueryResult<C = DefaultClient> = AQR<C>;
 
 pub use http::client::SnowflakeHttpClient;
 
 pub use executor::Executor;
+
+#[cfg(feature = "arrow")]
+use crate::driver::protocols::{ArrowQuery as AQ, ArrowQueryResult as AQR};
+
+#[cfg(feature = "arrow")]
+pub use crate::driver::protocols::{ArrowDescribeResult, ArrowProtocol};
 
 #[cfg(test)]
 mod tests {}

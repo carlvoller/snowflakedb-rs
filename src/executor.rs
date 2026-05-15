@@ -22,4 +22,12 @@ where
 
     /// Pings the Snowflake Database. Useful for checking if credentials are valid and server is up.
     fn ping(&mut self) -> impl Future<Output = Result<(), SnowflakeError>>;
+
+    /// Executes a Query directly, discarding any results that may be returned. Useful for DMLs
+    /// Returns the number of rows affected
+    fn execute(
+        &mut self,
+        query: impl ToString,
+    ) -> impl Future<Output = Result<i64, SnowflakeError>>;
+
 }

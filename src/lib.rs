@@ -5,6 +5,7 @@ pub(crate) mod errors;
 pub(crate) mod executor;
 pub(crate) mod http;
 pub(crate) mod transaction;
+pub(crate) mod utils;
 
 pub(crate) use errors::{SnowflakeError, error, this_errors};
 
@@ -22,6 +23,8 @@ pub use driver::{
 };
 
 pub use transaction::SnowflakeTransaction;
+
+pub use utils::*;
 
 pub struct NoClient;
 

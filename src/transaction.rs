@@ -103,4 +103,8 @@ impl<C: SnowflakeHttpClient, T: Protocol> Executor<C, T> for SnowflakeTransactio
         self.fetch_all("SELECT 1;").await?;
         Ok(())
     }
+
+    async fn execute(&mut self, query: impl ToString) -> Result<i64, SnowflakeError> {
+        Ok(self.query(query).await?.execute().await?.rows_affected())
+    }
 }
